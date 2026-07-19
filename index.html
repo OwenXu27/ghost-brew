@@ -31,7 +31,7 @@
   /* ── light theme ────────────────────── */
   body.light { --bg: #f2f2f0; --fg: #141414; --dim: #8a8a8a; --faint: #c4c4c0; --line: #dcdcd8; --red: #e01e2b; }
   body.light::before { background-image: radial-gradient(#dededa 1px, transparent 1px); }
-  body.light select, body.light input[type=text], body.light input[type=number], body.light textarea { background: #fff; }
+  body.light select, body.light input[type=text], body.light input[type=number], body.light textarea { background-color: #fff; }
   body.light button:disabled { border-color: #d4d4d0; }
   body.light .modal { background: rgba(242,242,240,.82); }
   body.light .modal-box { background: #fff; box-shadow: 0 0 40px rgba(224,30,43,.12); }
@@ -139,6 +139,17 @@
     background: #050505; color: var(--fg); border: 1px solid var(--faint);
     padding: 8px 10px; outline: none;
   }
+  /* custom chevron: the native arrow's position shifts with platform/font */
+  select {
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'><path d='M1 1l3.5 3.5L8 1' stroke='%23888' fill='none' stroke-width='1.2'/></svg>");
+    background-repeat: no-repeat; background-position: right 10px center;
+    padding-right: 28px; cursor: pointer;
+  }
+  /* native number spinners clip the digits in narrow inputs — arrows keys still work */
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   textarea {
     font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .05em;
     background: #050505; color: var(--fg); border: 1px solid var(--faint);
@@ -158,6 +169,12 @@
   .chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px 18px; }
   .chart-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .chart-tools select { max-width: 180px; }
+  /* one control strip, one height — select/input/button used to render at 36/34/27px */
+  .chart-tools select, .chart-tools input[type=number], .chart-tools button {
+    height: 32px; font-size: 10px; letter-spacing: .2em;
+    padding-top: 0; padding-bottom: 0;
+  }
+  .chart-tools button { padding-left: 15px; padding-right: 12px; }
   .legend { display: flex; gap: 20px; font-size: 9px; letter-spacing: .15em; color: var(--dim); flex-wrap: wrap; }
   .legend i { display: inline-block; width: 16px; vertical-align: middle; margin-right: 6px; }
   .legend .w { border-top: 2px solid var(--fg); }
@@ -185,14 +202,20 @@
 
   /* ── coach editor ───────────────────── */
   .editor { padding: 28px; display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+  .editor input[type=text], .editor input[type=number] { height: 32px; padding-top: 0; padding-bottom: 0; }
   .stage-row { display: flex; gap: 10px; align-items: center; }
   .stage-row input[type=text] { flex: 1; min-width: 0; }
-  .stage-row input.t { width: 76px; }
+  .stage-row input.t { width: 76px; flex: none; }  /* kill the flex the type=text rule gave it */
   .stage-row input.g { width: 76px; }
+  .stage-row button.mini {
+    width: 32px; height: 32px; padding: 0; flex: none;
+    font-size: 12px; line-height: 1; letter-spacing: 0;
+  }
   .stage-head { display: flex; gap: 10px; font-size: 9px; letter-spacing: .25em; color: var(--dim); }
   .stage-head span:nth-child(1) { flex: 1; }
   .stage-head span:nth-child(2) { width: 76px; }
   .stage-head span:nth-child(3) { width: 76px; }
+  .stage-head span:nth-child(4) { width: 32px; flex: none; }  /* matches the × column */
   .editor-actions { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
 
   /* ── modal ──────────────────────────── */
@@ -326,7 +349,7 @@
           <select id="ghost-sel"><option value="none">NONE</option></select>
           <span class="label" id="tol-label">TOL ±g</span>
           <input type="number" id="tol" value="5" min="1" max="50">
-          <button id="btn-sound" class="mini">Sound Off</button>
+          <button id="btn-sound">Sound Off</button>
         </div>
       </div>
       <div class="chart-body"><canvas id="chart"></canvas></div>
@@ -353,7 +376,7 @@
       <div class="label" id="editor-label">Recipe Editor</div>
       <div style="display:flex;gap:10px">
         <input type="text" id="r-name" placeholder="RECIPE NAME" spellcheck="false" style="flex:1;min-width:0">
-        <input type="number" id="r-dose" placeholder="DOSE g" min="0" step="0.1" style="width:120px">
+        <input type="number" id="r-dose" placeholder="DOSE g" min="0" step="0.1" style="width:136px">
       </div>
       <div class="stage-head"><span id="sh-name">STAGE</span><span id="sh-time">BY TIME</span><span id="sh-g">TARGET g</span><span></span></div>
       <div id="stages"></div>
