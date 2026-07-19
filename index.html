@@ -457,7 +457,7 @@ const I18N = {
     waiting: 'WAITING FOR DEVICE', offline: 'OFFLINE',
     connected: 'CONNECTED', disconnected: 'DISCONNECTED',
     autoConn: 'AUTO-CONNECTING', autoConnFail: 'AUTO-CONNECT FAILED // USE CONNECT BUTTON',
-    err: 'ERR', noBt: 'ERR // WEB BLUETOOTH NOT SUPPORTED (USE CHROME/EDGE)',
+    err: 'ERR', noBt: 'ERR // WEB BLUETOOTH NOT SUPPORTED — USE CHROME/EDGE ON DESKTOP, OR BLUEFY ON IPHONE/IPAD. TRY ?DEMO',
     doseErr: 'DOSE ERR // PUT BEANS ON SCALE FIRST',
     autoDose: g => 'AUTO-DOSE // ' + g + 'g STABLE — WILL ADOPT AT BREW START',
     doseSet: g => 'DOSE SET // ' + g + 'g — TARE & START',
@@ -506,7 +506,7 @@ const I18N = {
     waiting: '等待连接设备', offline: '离线',
     connected: '已连接', disconnected: '已断开',
     autoConn: '正在自动连接', autoConnFail: '自动连接失败 // 请手动点连接',
-    err: '错误', noBt: '错误 // 此浏览器不支持网页蓝牙（请用 CHROME/EDGE）',
+    err: '错误', noBt: '错误 // 此浏览器不支持网页蓝牙 —— 电脑请用 CHROME/EDGE,IPHONE/IPAD 请用 BLUEFY 浏览器;也可加 ?DEMO 体验',
     doseErr: '错误 // 请先放上豆子',
     autoDose: g => '粉量自动识别 // ' + g + '克（稳定重量）— 冲煮时自动采用',
     doseSet: g => '粉量已锁定 // ' + g + '克 — 去皮后开始',
@@ -1607,7 +1607,9 @@ els.start.onclick = () => { send(CMD.START); startRecording(); };
 els.stop.onclick = () => { send(CMD.STOP); stopRecording(true); };
 
 if (!navigator.bluetooth) {
-  els.connect.disabled = true;
+  foot(T().noBt);
+  /* keep the button tappable so the hint re-shows instead of silently dead */
+  els.connect.onclick = e => { e.stopImmediatePropagation(); foot(T().noBt); };
 }
 
 /* ── init ───────────────────────────────────────────── */
