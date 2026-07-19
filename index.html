@@ -318,7 +318,10 @@
     <div class="panel" id="recipe-list"></div>
     <div class="editor" id="recipe-editor">
       <div class="label" id="editor-label">Recipe Editor</div>
-      <input type="text" id="r-name" placeholder="RECIPE NAME" spellcheck="false">
+      <div style="display:flex;gap:10px">
+        <input type="text" id="r-name" placeholder="RECIPE NAME" spellcheck="false" style="flex:1;min-width:0">
+        <input type="number" id="r-dose" placeholder="DOSE g" min="0" step="0.1" style="width:120px">
+      </div>
       <div class="stage-head"><span id="sh-name">STAGE</span><span id="sh-time">BY TIME</span><span id="sh-g">TARGET g</span><span></span></div>
       <div id="stages"></div>
       <div class="editor-actions">
@@ -378,12 +381,12 @@ const I18N = {
     chartTitle: 'Brew Curve', legW: 'WEIGHT g', legT: 'TARGET', legS: 'SHADOW',
     guideNone: 'NONE', grpTargets: 'TARGETS', grpShadows: 'SHADOWS',
     recipes: 'Recipes', importB: 'Import', exportB: 'Export',
-    editor: 'Recipe Editor', namePh: 'RECIPE NAME',
+    editor: 'Recipe Editor', namePh: 'RECIPE NAME', dosePh: 'DESIGN DOSE g', doseTag: 'DOSE',
     shName: 'STAGE', shTime: 'REF TIME', shG: 'TARGET g', stageNamePh: 'STAGE NAME',
     addStage: '+ Stage', addHold: '+ Hold', saveRecipe: 'Save Recipe', newR: 'New', delR: 'Delete',
-    editorHelp: 'PULSE RECIPE: A POUR STAGE RAISES GRAMS VS THE PREVIOUS STAGE AND ADVANCES WHEN THE SCALE ACTUALLY HITS THE TARGET; A WAIT STAGE KEEPS GRAMS EQUAL AND ADVANCES AFTER (STAGE TIME − PREVIOUS STAGE TIME) SECONDS. TIMES ONLY PLACE THE STAGE LINES ON THE CHART.',
+    editorHelp: 'PULSE RECIPE: A POUR STAGE RAISES GRAMS VS THE PREVIOUS STAGE AND ADVANCES WHEN THE SCALE ACTUALLY HITS THE TARGET; A WAIT STAGE KEEPS GRAMS EQUAL AND ADVANCES AFTER (STAGE TIME − PREVIOUS STAGE TIME) SECONDS. TIMES ONLY PLACE THE STAGE LINES ON THE CHART. SET A DESIGN DOSE TO MAKE IT RATIO-BASED: AT A DIFFERENT ACTUAL DOSE, EVERY TARGET SCALES PROPORTIONALLY (12g RECIPE AT 16g DOSE → ×1.33).',
     qiLabel: 'Quick Import — Paste Text',
-    qiPh: 'bloom 0:45 50g\npour 1 1:15 120g\npour 2 1:50 190g\ndrawdown 2:30 240g\n\nalso: 闷蒸 45秒 50克 / 2:00 → 240',
+    qiPh: 'dose 12\nbloom 0:45 50g\npour 1 1:15 120g\npour 2 1:50 190g\ndrawdown 2:30 240g\n\nalso: 闷蒸 45秒 50克 / 2:00 → 240\ndose line (粉量 12克) = ratio-based recipe',
     qiParse: 'Parse + Save',
     qiNone: 'NO STAGES FOUND — each line needs at least a gram value, e.g. "bloom 0:45 50g"',
     qiSaved: 'SAVED',
@@ -427,12 +430,12 @@ const I18N = {
     chartTitle: '冲煮曲线', legW: '重量 克', legT: '目标', legS: '影子',
     guideNone: '无', grpTargets: '目标配方', grpShadows: '历史冲煮',
     recipes: '配方', importB: '导入', exportB: '导出',
-    editor: '配方编辑器', namePh: '配方名称',
+    editor: '配方编辑器', namePh: '配方名称', dosePh: '设计粉量 g', doseTag: '粉量',
     shName: '阶段', shTime: '参考时刻', shG: '目标克', stageNamePh: '阶段名称',
     addStage: '+ 注水段', addHold: '+ 等待段', saveRecipe: '保存配方', newR: '新建', delR: '删除',
-    editorHelp: '脉冲式配方：注水段 = 克重比上一段增加，实际称重达到目标克数时才提示进入下一段；等待段 = 克重与上一段相同，从上段结束起等待（本段时刻 − 上段时刻）秒。时间仅用于在图表上定位阶段线。',
+    editorHelp: '脉冲式配方：注水段 = 克重比上一段增加，实际称重达到目标克数时才提示进入下一段；等待段 = 克重与上一段相同，从上段结束起等待（本段时刻 − 上段时刻）秒。时间仅用于在图表上定位阶段线。填写设计粉量后配方按比例生效：实际粉量不同时，全部目标克数自动等比缩放（12克 配方用 16克 粉 → ×1.33）。',
     qiLabel: '快速导入 — 粘贴文本',
-    qiPh: '闷蒸 0:45 50g\n第一段 1:15 120g\n第二段 1:50 190g\n滴滤 2:30 240g\n\n也支持: bloom, 45s, 50g / 一段 90秒 120克 / 2:00 → 240',
+    qiPh: '粉量 12克\n闷蒸 0:45 50g\n第一段 1:15 120g\n第二段 1:50 190g\n滴滤 2:30 240g\n\n也支持: bloom, 45s, 50g / 一段 90秒 120克 / 2:00 → 240\n第一行「粉量」= 设计粉量，配方按比例缩放',
     qiParse: '解析并保存',
     qiNone: '没有解析到阶段 — 每行至少要有克数，例如「闷蒸 0:45 50g」',
     qiSaved: '已保存',
@@ -731,13 +734,26 @@ function trimSamples() {
 }
 
 /* ── coach engine ───────────────────────────────────── */
-function recipePoints(r) {
-  return [{ t: 0, g: 0 }, ...r.stages.map(s => ({ t: s.t, g: s.g }))];
+/* ratio-based recipes: a recipe with a design dose scales every stage target
+   by actual dose / design dose (a 12g recipe at a 16g dose pours ×1.33).
+   Actual dose = locked dose, else the fresh sniffed one; unknown → as written. */
+function stageScale() {
+  if (!ghost || ghost.type !== 'recipe' || !(ghost.obj.dose > 0)) return 1;
+  const d = doseWeight > 0 ? doseWeight
+    : (autoDose > 0 && Date.now() - autoDoseAt < 5 * 60 * 1000 ? autoDose : 0);
+  return d > 0 ? d / ghost.obj.dose : 1;
+}
+function activeStages() {
+  const st = ghost.obj.stages, k = stageScale();
+  return k === 1 ? st : st.map(s => ({ ...s, g: Math.round(s.g * k * 10) / 10 }));
+}
+function recipePoints(stages) {
+  return [{ t: 0, g: 0 }, ...stages.map(s => ({ t: s.t, g: s.g }))];
 }
 function targetAt(t) {
   if (!ghost) return null;
   if (ghost.type === 'recipe') {
-    const pts = recipePoints(ghost.obj);
+    const pts = recipePoints(activeStages());
     if (t >= pts[pts.length - 1].t) return pts[pts.length - 1].g;
     for (let i = 0; i < pts.length - 1; i++) {
       if (t <= pts[i + 1].t) {
@@ -768,18 +784,25 @@ function updateCoach(t, g) {
   els.weight.classList.toggle('warn', over);
 
   if (ghost.type === 'recipe') {
-    const stages = ghost.obj.stages;
+    const stages = activeStages();   // ratio-scaled to the actual dose
     const isPour = i => i >= 0 && stages[i] && stages[i].g > (i === 0 ? 0 : stages[i - 1].g);
     /* wait-stage length = stage time − previous stage time (floor 5s) */
     const dur = i => Math.max(5, stages[i].t - (i > 0 ? stages[i - 1].t : 0));
-    /* pour stages advance on WEIGHT — the cue fires when the scale actually
-       hits the target grams; wait stages advance on DURATION from the moment
-       the previous stage completed. Times only place the chart stage lines. */
+    /* pour stages advance on WEIGHT (½g slack absorbs scale latency/dripping);
+       wait stages advance on DURATION from the previous stage's completion.
+       Times only place the stage lines on the chart. */
+    const before = stageIdx;
     while (stageIdx < stages.length &&
-           (isPour(stageIdx) ? g >= stages[stageIdx].g
+           (isPour(stageIdx) ? g >= stages[stageIdx].g - 0.5
                              : t >= stageStartT + dur(stageIdx))) {
       stageIdx++;
       stageStartT = t;
+    }
+    if (stageIdx !== before) {
+      /* announce ONLY the stage we landed on: when stages cascade in one pass
+         (you poured through a wait), per-stage speak() calls cancel each other
+         — the first utterance dies before a word is heard. The landing stage
+         is the only instruction that matters right now. */
       const next = stages[stageIdx];
       beep(next ? (isPour(stageIdx) ? 880 : 520) : 440, 0.15);
       speak(next
@@ -942,7 +965,7 @@ function drawChart() {
   let gMaxW = 0;
   if (ghost) {
     gMaxW = (ghost.type === 'recipe'
-      ? Math.max(0, ...ghost.obj.stages.map(s => s.g))
+      ? Math.max(0, ...activeStages().map(s => s.g))
       : Math.max(0, ...ghost.obj.samples.map(s => s.w))) + tolerance;
   }
   const dataWMax = Math.max(0, ...wSamples.map(s => s.v));
@@ -1091,6 +1114,7 @@ function parseT(str) {
 function loadEditor(r) {
   editingRecipe = r;
   $('r-name').value = r ? r.name : '';
+  $('r-dose').value = r && r.dose ? r.dose : '';
   const box = $('stages');
   box.innerHTML = '';
   (r ? r.stages : T().defStages.map(s => ({ ...s })))
@@ -1113,7 +1137,8 @@ async function renderRecipes() {
     const dur = r.stages.length ? r.stages[r.stages.length - 1].t : 0;
     row.innerHTML =
       '<span class="name">' + (active ? '▸ ' : '') + esc(r.name) + '</span>' +
-      '<span class="meta">' + r.stages.length + ' ' + T().stagesUnit + ' // ' + total + 'g // ' + fmtTime(dur * 1000).slice(0, 5) + '</span>';
+      '<span class="meta">' + r.stages.length + ' ' + T().stagesUnit + ' // ' + total + 'g' +
+      (r.dose ? ' @ ' + r.dose + 'g ' + T().doseTag : '') + ' // ' + fmtTime(dur * 1000).slice(0, 5) + '</span>';
 
     const mk = (label, fn, primary) => {
       const b = document.createElement('button');
@@ -1130,7 +1155,9 @@ async function renderRecipes() {
     }, active);
     mk(T().btnEdit, () => loadEditor(r));
     mk(T().btnDup, async () => {
-      await putRecipe({ name: r.name + T().copySuffix, stages: JSON.parse(JSON.stringify(r.stages)) });
+      const copy = { name: r.name + T().copySuffix, stages: JSON.parse(JSON.stringify(r.stages)) };
+      if (r.dose) copy.dose = r.dose;
+      await putRecipe(copy);
       renderRecipes().then(rebuildGhostSel);
     });
     mk(T().btnDel, async () => {
@@ -1170,7 +1197,9 @@ $('r-file').onchange = async e => {
         .map(s => ({ name: String(s.name || 'STAGE'), t: +s.t, g: +s.g }))
         .sort((a, b) => a.t - b.t);
       if (!stages.length) continue;
-      await putRecipe({ name: r.name, stages });
+      const rec = { name: r.name, stages };
+      if (isFinite(+r.dose) && +r.dose > 0) rec.dose = +r.dose;
+      await putRecipe(rec);
       n++;
     }
     await renderRecipes();
@@ -1205,6 +1234,8 @@ $('r-save').onclick = async () => {
   }).sort((a, b) => a.t - b.t);
   if (!stages.length) return;
   const r = { name: $('r-name').value.trim() || 'UNTITLED', stages };
+  const dose = +$('r-dose').value || 0;
+  if (dose > 0) r.dose = dose;      // design dose → ratio-based recipe
   if (editingRecipe && editingRecipe.id) r.id = editingRecipe.id;  // no id key → autoIncrement generates one
   const id = await putRecipe(r);
   r.id = r.id || id;
@@ -1243,7 +1274,14 @@ function parseRecipeText(text) {
   return stages.sort((a, b) => a.t - b.t);
 }
 $('qi-parse').onclick = async () => {
-  const stages = parseRecipeText($('qi-text').value);
+  /* optional design-dose line ("粉量 12克" / "dose 12") makes it ratio-based */
+  let dose = 0;
+  const kept = [];
+  for (const ln of $('qi-text').value.split(/[\n;；]+/)) {
+    const m = ln.trim().match(/^(?:粉量|dose)\s*[:：]?\s*(\d+(?:\.\d+)?)/i);
+    if (m) dose = parseFloat(m[1]); else kept.push(ln);
+  }
+  const stages = parseRecipeText(kept.join('\n'));
   const prev = $('qi-preview');
   if (!stages.length) {
     prev.textContent = T().qiNone;
@@ -1251,10 +1289,12 @@ $('qi-parse').onclick = async () => {
   }
   const name = $('qi-name').value.trim() ||
     'IMPORTED ' + new Date().toISOString().slice(5, 10);
-  await putRecipe({ name, stages });
+  const rec = { name, stages };
+  if (dose > 0) rec.dose = dose;
+  await putRecipe(rec);
   await renderRecipes();
   rebuildGhostSel();
-  prev.textContent = T().qiSaved + ' // ' + name + '\n' + stages.map(s =>
+  prev.textContent = T().qiSaved + ' // ' + name + (dose > 0 ? ' // ' + dose + 'g ' + T().doseTag : '') + '\n' + stages.map(s =>
     fmtTime(s.t * 1000).slice(0, 5) + '  →  ' + String(s.g).padStart(3, ' ') + 'g   ' + s.name
   ).join('\n');
   foot(T().parsed + ' // ' + stages.length + ' ' + T().stagesTail);
@@ -1339,6 +1379,7 @@ function applyLang() {
   $('r-export').textContent = t.exportB;
   $('editor-label').textContent = t.editor;
   $('r-name').placeholder = t.namePh;
+  $('r-dose').placeholder = t.dosePh;
   $('sh-name').textContent = t.shName;
   $('sh-time').textContent = t.shTime;
   $('sh-g').textContent = t.shG;
@@ -1428,6 +1469,7 @@ window.addEventListener('unhandledrejection', e => {
     if (!recipesCache.length) {
       await putRecipe({
         name: 'CLASSIC 1:15',
+        dose: 15,
         stages: [
           { name: '闷蒸注水', t: 45, g: 50 },
           { name: '闷蒸等待', t: 60, g: 50 },
@@ -1456,10 +1498,11 @@ window.addEventListener('unhandledrejection', e => {
         await putRecipe(classic);
       }
     }
-    /* built-in preset: OREA fast-flow pulse recipe */
+    /* built-in preset: OREA fast-flow pulse recipe (designed for a 12g dose) */
     if (!recipesCache.some(r => r.name === 'OREA')) {
       await putRecipe({
         name: 'OREA',
+        dose: 12,
         stages: [
           { name: '闷蒸注水', t: 6, g: 30 },
           { name: '闷蒸等待', t: 24, g: 30 },
@@ -1470,6 +1513,11 @@ window.addEventListener('unhandledrejection', e => {
           { name: '滴滤', t: 150, g: 200 },
         ],
       });
+    }
+    /* one-time migration: built-in presets become ratio-based (design dose) */
+    for (const [nm, d] of [['CLASSIC 1:15', 15], ['OREA', 12]]) {
+      const r = recipesCache.find(x => x.name === nm && !x.dose);
+      if (r) { r.dose = d; await putRecipe(r); }
     }
     loadEditor(null);
     applyLang();

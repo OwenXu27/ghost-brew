@@ -22,7 +22,8 @@
 
 ## 功能
 
-- **幽灵曲线教练**：目标曲线 + 容差带；阶段线（注水段/等待段脉冲式配方）；超差红色警示；蜂鸣 + 中文/英文语音播报
+- **幽灵曲线教练**：目标曲线 + 容差带；脉冲式配方的阶段提示**按称重判定**——注水/闷蒸段在实际克重达到目标的瞬间才播报（½ 克容差吸收秤的延迟），等待段从上段结束起按时长倒计时；蜂鸣 + 中文/英文语音播报
+- **比例配方**：配方可设「设计粉量」（如 OREA 按 12g 设计），实际粉量不同（12 克 / 16 克）时全部目标克数自动等比缩放，一份配方通吃
 - **五宫格大读数**：粉量 · 时间 · 重量 · 流速 · 水粉比（水粉比基于自动识别的粉量实时计算）
 - **跟随秤状态机**：订阅秤的计时状态通知（`C 0x43`），双向同步开始/停止；流速启发式作为兜底
 - **粉量自动嗅探**：空闲时检测 5–100g 的稳定重量平台并自动采用（滤杯+分享壶 >100g 不会误触发）；也保留手动「锁定粉量」
@@ -74,7 +75,8 @@ python3 -m http.server 8000
 
 **Ghost Brew** — a ghost-curve coach for pour-over coffee, built as a single-file web app for the AtomHeart Eclair BLE scale.
 
-- Target/shadow curves with a tolerance band, pulse-pour recipes, beep & voice cues
+- Target/shadow curves with a tolerance band, pulse-pour recipes whose cues are **weight-driven** (pour stages announce the moment the scale hits the target grams, waits count down by duration), beep & voice cues
+- **Ratio-based recipes**: set a design dose (e.g. OREA = 12g) and every stage target scales to your actual dose — one recipe fits both 12g and 16g
 - Follows the scale's own state machine over BLE (`C` timer-state notifications): pouring starts the recording, lifting the dripper stops it — zero app interaction needed
 - Passive dose sniffing (stable-plateau detection) powers a live brew-ratio readout
 - Multi-recipe management with JSON import/export and a text quick-import; brew archive (IndexedDB); zh/en UI, dark/light themes
