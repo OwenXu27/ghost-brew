@@ -1672,11 +1672,17 @@ window.addEventListener('unhandledrejection', e => {
           { name: '闷蒸等待', t: 24, g: 30 },
           { name: '第一段注水', t: 30, g: 120 },
           { name: '等待下水', t: 60, g: 120 },
-          { name: '第二段注水', t: 60, g: 200 },
+          { name: '第二段注水', t: 70, g: 200 },
           { name: '等待下水', t: 70, g: 200 },
           { name: '滴滤', t: 150, g: 200 },
         ],
       });
+    }
+    /* one-time migration: fix 2nd-pour timing in the default OREA (60s -> 70s) */
+    const oreaDef = recipesCache.find(r => r.name === 'OREA' && r.stages.length === 7);
+    if (oreaDef) {
+      const s2 = oreaDef.stages.find(x => x.name === '第二段注水');
+      if (s2 && s2.t === 60 && s2.g === 200) { s2.t = 70; await putRecipe(oreaDef); }
     }
     /* one-time migration: built-in presets become ratio-based (design dose) */
     for (const [nm, d] of [['CLASSIC 1:15', 15], ['OREA', 12]]) {
