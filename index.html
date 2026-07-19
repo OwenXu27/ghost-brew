@@ -10,6 +10,9 @@
   :root {
     --bg: #000; --fg: #f2f2f2; --dim: #555; --faint: #2a2a2a;
     --line: #1a1a1a; --red: #ff2436;
+    /* motion tokens (emilkowalski AUDIT.md values — never approximate) */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
@@ -18,6 +21,7 @@
     font-family: 'Space Mono', monospace;
     display: flex; flex-direction: column; height: 100dvh;
     overflow: hidden; -webkit-font-smoothing: antialiased;
+    transition: background-color .24s ease, color .24s ease;  /* theme flip, not a jolt */
   }
   body::before {
     content: ''; position: fixed; inset: 0;
@@ -29,8 +33,6 @@
   body.light::before { background-image: radial-gradient(#dededa 1px, transparent 1px); }
   body.light select, body.light input[type=text], body.light input[type=number], body.light textarea { background: #fff; }
   body.light button:disabled { border-color: #d4d4d0; }
-  body.light button.primary:hover:not(:disabled) { color: #fff; }
-  body.light .row:hover { background: #e9e9e5; }
   body.light .modal { background: rgba(242,242,240,.82); }
   body.light .modal-box { background: #fff; box-shadow: 0 0 40px rgba(224,30,43,.12); }
   body.light #weight { text-shadow: 0 0 24px rgba(20,20,20,.12); }
@@ -51,10 +53,21 @@
   .brand .red { text-shadow: 0 0 12px rgba(255,36,54,.6); }
   .status-cluster { display: flex; align-items: center; gap: 28px; }
   .status-item { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .15em; color: var(--dim); }
-  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); transition: .3s; }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--faint);
+    transition: background-color .2s ease, box-shadow .2s ease; }
   .led.on { background: var(--red); box-shadow: 0 0 10px var(--red); }
   .led.rec { background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: .15; } }
+  @keyframes rec-soft { 50% { opacity: .4; } }
+  /* entrances: stagger rows / text flashes */
+  @keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes fade-in { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    /* gentler, not zero: state must still be legible */
+    .led.rec { animation: rec-soft 2.4s ease-in-out infinite; }
+    .modal-box, .modal.open .modal-box { transform: none;
+      transition: opacity .18s ease; }
+  }
 
   nav {
     display: flex; gap: 32px; padding: 0 28px;
@@ -64,9 +77,19 @@
     border: none; background: none; padding: 10px 2px 9px;
     font-size: 11px; letter-spacing: .3em; color: var(--dim);
     border-bottom: 1px solid transparent; cursor: pointer;
+    transition: color .15s ease, border-color .15s ease;
   }
-  nav button:hover { color: var(--fg); box-shadow: none; }
   nav button.active { color: var(--red); border-bottom-color: var(--red); }
+
+  /* hover only where hover exists — touch taps must not leave sticky states */
+  @media (hover: hover) and (pointer: fine) {
+    nav button:hover { color: var(--fg); box-shadow: none; }
+    button:hover:not(:disabled) { border-color: var(--red); color: var(--red); box-shadow: 0 0 16px rgba(255,36,54,.15); }
+    button.primary:hover:not(:disabled) { background: var(--red); color: #000; }
+    body.light button.primary:hover:not(:disabled) { color: #fff; }
+    .row:hover { background: #080808; }
+    body.light .row:hover { background: #e9e9e5; }
+  }
 
   .view { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }
   #view-brew { overflow-y: auto; }
@@ -86,6 +109,7 @@
     line-height: 1;
     font-variant-numeric: tabular-nums;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: color .15s ease, text-shadow .15s ease; /* soften warn/neg flicker */
   }
   #weight { text-shadow: 0 0 24px rgba(242,242,242,.15); }
   #weight.neg, #weight.warn { color: var(--red); text-shadow: 0 0 24px rgba(255,36,54,.4); }
@@ -101,12 +125,12 @@
     font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 0.3em;
     text-transform: uppercase; color: var(--fg); background: transparent;
     border: 1px solid var(--faint); padding: 12px 24px 12px 28px; cursor: pointer;
-    transition: border-color .2s, color .2s, box-shadow .2s;
+    transition: border-color .2s ease, color .2s ease, box-shadow .2s ease,
+                transform .16s var(--ease-out);
   }
-  button:hover:not(:disabled) { border-color: var(--red); color: var(--red); box-shadow: 0 0 16px rgba(255,36,54,.15); }
+  button:not(:disabled):active { transform: scale(0.97); }  /* press feedback */
   button:disabled { color: var(--faint); border-color: #141414; cursor: default; }
   button.primary { border-color: var(--red); color: var(--red); }
-  button.primary:hover:not(:disabled) { background: var(--red); color: #000; }
   button.mini { padding: 6px 12px 6px 15px; font-size: 9px; }
   button.toggled { border-color: var(--red); color: var(--red); }
 
@@ -148,8 +172,8 @@
     display: flex; align-items: center; gap: 20px;
     padding: 14px 6px; border-bottom: 1px solid var(--line);
     font-size: 12px; letter-spacing: .08em;
+    transition: background-color .15s ease;
   }
-  .row:hover { background: #080808; }
   .row.active .name { color: var(--red); }
   .row .name { flex: 1; font-weight: 700; letter-spacing: .15em; }
   .row .meta { color: var(--dim); font-size: 10px; letter-spacing: .15em; white-space: nowrap; }
@@ -176,11 +200,20 @@
     position: fixed; inset: 0; z-index: 10;
     background: rgba(0,0,0,.85); display: flex;
     align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .18s ease;      /* exit: a beat faster */
   }
+  .modal.open { opacity: 1; transition: opacity .22s ease; }
   .modal-box {
     border: 1px solid var(--red); background: #000; padding: 32px;
     display: flex; flex-direction: column; gap: 18px; width: min(420px, 90vw);
     box-shadow: 0 0 40px rgba(255,36,54,.15);
+    /* never scale(0) — appear from near-full size; modals keep center origin */
+    opacity: 0; transform: scale(.95);
+    transition: transform .18s var(--ease-out), opacity .18s ease;
+  }
+  .modal.open .modal-box {
+    opacity: 1; transform: none;
+    transition: transform .24s var(--ease-out), opacity .2s ease;
   }
   .modal-box input { width: 100%; }
   .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
@@ -526,7 +559,67 @@ const els = {
 };
 
 const now = () => (performance.now() - t0) / 1000;
-const foot = m => { els.footer.textContent = m; };
+
+/* ── motion helpers ─────────────────────────────────── */
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';   // matches --ease-out
+/* text swap that draws the eye without slowing anything down.
+   Reduced motion: opacity only, no travel. */
+function flashLine(el, dy = 6, ms = 200) {
+  el.animate(reduceMotion
+    ? [{ opacity: 0 }, { opacity: 1 }]
+    : [{ opacity: 0, transform: 'translateY(' + dy + 'px)' }, { opacity: 1, transform: 'none' }],
+    { duration: ms, easing: reduceMotion ? 'ease' : EASE_OUT });
+}
+const foot = m => { els.footer.textContent = m; flashLine(els.footer, 2, 160); };
+
+/* modal: .hidden owns display, .open owns the transition states */
+function showModal() {
+  const m = $('modal');
+  m.classList.remove('hidden');
+  requestAnimationFrame(() => requestAnimationFrame(() => m.classList.add('open')));
+}
+function hideModal() {
+  const m = $('modal');
+  m.classList.remove('open');
+  setTimeout(() => m.classList.add('hidden'), 200);  // after the 180ms exit
+}
+
+/* brew-complete celebration: dot-matrix square burst, gone in 900ms.
+   The one delight-budget spend in the app (1–3 brews/day). */
+function celebrate() {
+  if (reduceMotion) return;   // the stage-line flash still marks the moment
+  const r = els.stageLine.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const c = document.createElement('canvas');
+  c.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:20';
+  c.width = innerWidth * devicePixelRatio; c.height = innerHeight * devicePixelRatio;
+  document.body.appendChild(c);
+  const x = c.getContext('2d');
+  x.scale(devicePixelRatio, devicePixelRatio);
+  const cs = getComputedStyle(document.body);
+  const red = cs.getPropertyValue('--red').trim() || '#ff2436';
+  const fg = cs.color;
+  const ps = Array.from({ length: 26 }, (_, i) => {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2;   // upward fan
+    const v = 2.4 + Math.random() * 3.2;
+    return { x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+             s: Math.random() < 0.5 ? 2 : 3, c: i % 3 ? red : fg };
+  });
+  const tStart = performance.now();
+  (function tick(t) {
+    const k = (t - tStart) / 900;
+    if (k >= 1) { c.remove(); return; }
+    x.clearRect(0, 0, innerWidth, innerHeight);
+    x.globalAlpha = 1 - k;
+    for (const p of ps) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.09;   // gravity
+      x.fillStyle = p.c;
+      x.fillRect(p.x, p.y, p.s, p.s);           // squares, not dots — dot-matrix
+    }
+    requestAnimationFrame(tick);
+  })(tStart);
+}
 
 /* ── storage (IndexedDB) ────────────────────────────── */
 let db = null;
@@ -845,6 +938,10 @@ function updateCoach(t, g) {
           ? T().stagePour(cur.name, cur.g, Math.max(0, cur.g - g).toFixed(1))
           : T().stageWait(cur.name, cur.g, Math.max(0, Math.ceil(stageStartT + dur(stageIdx) - t))))
       : T().stageDoneL;
+    if (stageIdx !== before) {
+      flashLine(els.stageLine);        // countdown ticks above stay instant
+      if (!cur) celebrate();           // brew complete — the delight moment
+    }
   }
 }
 
@@ -884,7 +981,7 @@ function stopRecording(askSave = true) {
     $('brew-name').value =
       'BREW ' + d.toISOString().slice(0, 10) + ' ' +
       String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
-    $('modal').classList.remove('hidden');
+    showModal();
   } else {
     recSamples = [];
   }
@@ -1092,9 +1189,12 @@ async function renderArchive() {
     return;
   }
   list.innerHTML = '';
-  brewsCache.slice().reverse().forEach(b => {
+  brewsCache.slice().reverse().forEach((b, i) => {
     const row = document.createElement('div');
     row.className = 'row';
+    /* 40ms stagger, capped at 10 rows — decorative, never blocks taps */
+    row.style.animation = (reduceMotion ? 'fade-in' : 'row-in') + ' .24s ' + EASE_OUT + ' both';
+    row.style.animationDelay = Math.min(i, 9) * 40 + 'ms';
     row.innerHTML =
       '<span class="name">' + esc(b.name) + '</span>' +
       '<span class="meta">' + b.date.slice(0, 10) + ' // ' +
@@ -1161,10 +1261,12 @@ async function renderRecipes() {
   }
   list.innerHTML = '';
   const curGuide = els.ghostSel.value;
-  recipesCache.forEach(r => {
+  recipesCache.forEach((r, i) => {
     const active = curGuide === 'r:' + r.id;
     const row = document.createElement('div');
     row.className = 'row' + (active ? ' active' : '');
+    row.style.animation = (reduceMotion ? 'fade-in' : 'row-in') + ' .24s ' + EASE_OUT + ' both';
+    row.style.animationDelay = Math.min(i, 9) * 40 + 'ms';
     const total = r.stages.length ? r.stages[r.stages.length - 1].g : 0;
     const dur = r.stages.length ? r.stages[r.stages.length - 1].t : 0;
     row.innerHTML =
@@ -1343,13 +1445,13 @@ $('m-save').onclick = async () => {
     samples,
   });
   recSamples = [];
-  $('modal').classList.add('hidden');
+  hideModal();
   renderArchive().then(rebuildGhostSel);
   foot(T().archived + ' // ' + name);
 };
 $('m-discard').onclick = () => {
   recSamples = [];
-  $('modal').classList.add('hidden');
+  hideModal();
 };
 
 /* ── nav / views ────────────────────────────────────── */
@@ -1358,6 +1460,11 @@ function switchView(name) {
     b.classList.toggle('active', b.dataset.view === name));
   ['brew', 'archive', 'coach'].forEach(v =>
     $('view-' + v).classList.toggle('hidden', v !== name));
+  const v = $('view-' + name);
+  v.animate(reduceMotion
+    ? [{ opacity: 0 }, { opacity: 1 }]
+    : [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }],
+    { duration: reduceMotion ? 150 : 180, easing: reduceMotion ? 'ease' : EASE_OUT });
 }
 document.querySelectorAll('nav button').forEach(b =>
   b.onclick = () => switchView(b.dataset.view));
