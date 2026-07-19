@@ -397,7 +397,7 @@ const I18N = {
     stagePour: (n, g, left) => '▸ POUR ' + n + ' → ' + g + 'g · ' + left + 'g TO GO',
     stageWait: (n, g, s) => '▸ WAIT ' + n + ' · HOLD ' + g + 'g · ' + s + 's LEFT',
     stageDoneL: '▸ DONE',
-    speakStop: 'stop pouring', speakDone: 'done', speakPour: 'pour',
+    speakStop: 'Stop pouring.', speakDone: 'Brew complete.', speakPourTo: g => 'Pour to ' + Math.round(g) + ' grams.',
     waiting: 'WAITING FOR DEVICE', offline: 'OFFLINE',
     connected: 'CONNECTED', disconnected: 'DISCONNECTED',
     autoConn: 'AUTO-CONNECTING', autoConnFail: 'AUTO-CONNECT FAILED // USE CONNECT BUTTON',
@@ -446,7 +446,7 @@ const I18N = {
     stagePour: (n, g, left) => '▸ 注水 ' + n + ' → ' + g + '克 · 还差 ' + left + '克',
     stageWait: (n, g, s) => '▸ 等待 ' + n + ' · 保持 ' + g + '克 · 剩 ' + s + '秒',
     stageDoneL: '▸ 完成',
-    speakStop: '停止注水', speakDone: '完成', speakPour: '注水',
+    speakStop: '停止注水', speakDone: '完成', speakPourTo: g => '注水到 ' + Math.round(g) + ' 克',
     waiting: '等待连接设备', offline: '离线',
     connected: '已连接', disconnected: '已断开',
     autoConn: '正在自动连接', autoConnFail: '自动连接失败 // 请手动点连接',
@@ -580,10 +580,40 @@ function beep(freq = 880, dur = 0.09) {
 function speak(text) {
   if (!soundOn || !('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
+  const zh = /[一-鿿]/.test(text);
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = /[一-鿿]/.test(text) ? 'zh-CN' : 'en-US';
-  u.rate = 1.1;
+  u.lang = zh ? 'zh-CN' : 'en-US';
+  const v = voiceCache && (zh ? voiceCache.zh : voiceCache.en);
+  if (v) u.voice = v;
+  u.rate = 1;
+  u.pitch = 1;
   speechSynthesis.speak(u);
+}
+/* explicit voice picking: the browser default can land on a novelty voice
+   (Whisper, Zarvox…). Prefer natural voices, denylist the creepy ones. */
+let voiceCache = null;
+function pickVoice(prefix) {
+  const vs = speechSynthesis.getVoices()
+    .filter(v => v.lang.toLowerCase().replace('_', '-').startsWith(prefix));
+  if (!vs.length) return null;
+  const novelty = /whisper|zarvox|trinoid|deranged|hysterical|bubbles|cello|bahh|bells|boing|junior|pipe organ|superstar|alien|wobble|fred|bad news|good news|organ/i;
+  const pool = vs.filter(v => !novelty.test(v.name));
+  const list = pool.length ? pool : vs;
+  const pref = prefix === 'zh'
+    ? [/google.*(普通话|中文)/i, /microsoft.*(xiaoxiao|xiaoyi|yunxi)/i, /ting-?ting/i, /mei-?jia/i, /sin-?ji/i]
+    : [/google us english/i, /microsoft.*online.*natural/i, /^samantha$/i, /^alex$/i, /^ava$/i, /^susan$/i, /google uk english female/i];
+  for (const re of pref) {
+    const hit = list.find(v => re.test(v.name));
+    if (hit) return hit;
+  }
+  return list.find(v => v.localService) || list[0];
+}
+function refreshVoices() {
+  voiceCache = { en: pickVoice('en'), zh: pickVoice('zh') };
+}
+if ('speechSynthesis' in window) {
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = refreshVoices;   // voices load async
 }
 
 /* ── BLE ────────────────────────────────────────────── */
@@ -806,7 +836,7 @@ function updateCoach(t, g) {
       const next = stages[stageIdx];
       beep(next ? (isPour(stageIdx) ? 880 : 520) : 440, 0.15);
       speak(next
-        ? (isPour(stageIdx) ? (lang === 'zh' ? next.name : T().speakPour) : T().speakStop)
+        ? (isPour(stageIdx) ? (lang === 'zh' ? next.name : T().speakPourTo(next.g)) : T().speakStop)
         : T().speakDone);
     }
     const cur = stages[stageIdx];
@@ -839,7 +869,7 @@ function startRecording() {
   els.deltaWrap.classList.toggle('hidden', !ghost);
   els.stageLine.textContent = '';
   if (ghost && ghost.type === 'recipe' && ghost.obj.stages.length)
-    speak(lang === 'zh' ? ghost.obj.stages[0].name : T().speakPour);
+    speak(lang === 'zh' ? ghost.obj.stages[0].name : T().speakPourTo(activeStages()[0].g));
   beep(880);
 }
 function stopRecording(askSave = true) {
