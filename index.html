@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #000; --fg: #f2f2f2; --dim: #555; --faint: #2a2a2a;
+    --bg: #000; --fg: #f2f2f2; --dim: #7d7d7d; --faint: #2a2a2a;
     --line: #1a1a1a; --red: #ff2436;
     /* motion tokens (emilkowalski AUDIT.md values — never approximate) */
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -29,14 +29,14 @@
     background-size: 6px 6px; pointer-events: none; z-index: 0;
   }
   /* ── light theme ────────────────────── */
-  body.light { --bg: #f2f2f0; --fg: #141414; --dim: #8a8a8a; --faint: #c4c4c0; --line: #dcdcd8; --red: #e01e2b; }
+  body.light { --bg: #f2f2f0; --fg: #141414; --dim: #6e6e6a; --faint: #c4c4c0; --line: #dcdcd8; --red: #c81024; }
   body.light::before { background-image: radial-gradient(#dededa 1px, transparent 1px); }
   body.light select, body.light input[type=text], body.light input[type=number], body.light textarea { background-color: #fff; }
   body.light button:disabled { border-color: #d4d4d0; }
   body.light .modal { background: rgba(242,242,240,.82); }
-  body.light .modal-box { background: #fff; box-shadow: 0 0 40px rgba(224,30,43,.12); }
+  body.light .modal-box { background: #fff; box-shadow: 0 0 40px rgba(200,16,36,.12); }
   body.light #weight { text-shadow: 0 0 24px rgba(20,20,20,.12); }
-  body.light footer { color: #a8a8a4; }
+  body.light footer { color: #7a7a74; }
 
   main { position: relative; z-index: 1; display: flex; flex-direction: column; flex: 1; }
   .dot { font-family: 'DotGothic16', monospace; }
@@ -131,7 +131,7 @@
   button:not(:disabled):active { transform: scale(0.97); }  /* press feedback */
   button:disabled { color: var(--faint); border-color: #141414; cursor: default; }
   button.primary { border-color: var(--red); color: var(--red); }
-  button.mini { padding: 6px 12px 6px 15px; font-size: 9px; }
+  button.mini { padding: 6px 12px 6px 15px; font-size: 10px; }
   button.toggled { border-color: var(--red); color: var(--red); }
 
   select, input[type=text], input[type=number] {
@@ -175,7 +175,7 @@
     padding-top: 0; padding-bottom: 0;
   }
   .chart-tools button { padding-left: 15px; padding-right: 12px; }
-  .legend { display: flex; gap: 20px; font-size: 9px; letter-spacing: .15em; color: var(--dim); flex-wrap: wrap; }
+  .legend { display: flex; gap: 20px; font-size: 10px; letter-spacing: .15em; color: var(--dim); flex-wrap: wrap; }
   .legend i { display: inline-block; width: 16px; vertical-align: middle; margin-right: 6px; }
   .legend .w { border-top: 2px solid var(--fg); }
   .legend .t { border-top: 1px dashed var(--red); }
@@ -194,7 +194,7 @@
   .row.active .name { color: var(--red); }
   .row .name { flex: 1; font-weight: 700; letter-spacing: .15em; }
   .row .meta { color: var(--dim); font-size: 10px; letter-spacing: .15em; white-space: nowrap; }
-  .empty { padding: 60px 0; text-align: center; color: var(--faint); font-size: 11px; letter-spacing: .3em; }
+  .empty { padding: 60px 0; text-align: center; color: var(--dim); font-size: 11px; letter-spacing: .3em; }
   .panel-head {
     display: flex; justify-content: space-between; align-items: center;
     padding: 22px 28px 0;
@@ -211,7 +211,7 @@
     width: 32px; height: 32px; padding: 0; flex: none;
     font-size: 12px; line-height: 1; letter-spacing: 0;
   }
-  .stage-head { display: flex; gap: 10px; font-size: 9px; letter-spacing: .25em; color: var(--dim); }
+  .stage-head { display: flex; gap: 10px; font-size: 10px; letter-spacing: .25em; color: var(--dim); }
   .stage-head span:nth-child(1) { flex: 1; }
   .stage-head span:nth-child(2) { width: 76px; }
   .stage-head span:nth-child(3) { width: 76px; }
@@ -243,7 +243,7 @@
 
   footer {
     display: flex; justify-content: space-between; padding: 12px 28px;
-    border-top: 1px solid var(--line); font-size: 9px; letter-spacing: .25em; color: #333;
+    border-top: 1px solid var(--line); font-size: 10px; letter-spacing: .25em; color: #6f6f6f;
   }
 
   /* ── responsive ─────────────────────── */
@@ -1068,18 +1068,18 @@ els.sound.onclick = () => {
 /* ── chart ──────────────────────────────────────────── */
 const PAL = {
   dark: {
-    grid: '#161616', axis: '#444', base: '#222',
-    stage: '#241014', stageTxt: '#66333a',
+    grid: '#161616', axis: '#7d7d7d', base: '#222',
+    stage: '#241014', stageTxt: '#b45f68',
     bandR: 'rgba(255,36,54,.25)', bandB: 'rgba(120,120,120,.2)',
     target: '#ff2436', shadowT: '#777',
     weight: '#f2f2f2', glow: 'rgba(242,242,242,.4)', dot: '#ff2436',
   },
   light: {
-    grid: '#e2e2de', axis: '#999', base: '#ccc',
-    stage: '#f3d8da', stageTxt: '#c2777f',
-    bandR: 'rgba(224,30,43,.18)', bandB: 'rgba(90,90,90,.18)',
-    target: '#e01e2b', shadowT: '#999',
-    weight: '#141414', glow: 'rgba(20,20,20,.22)', dot: '#e01e2b',
+    grid: '#e2e2de', axis: '#6e6e6a', base: '#ccc',
+    stage: '#f3d8da', stageTxt: '#a64952',
+    bandR: 'rgba(200,16,36,.18)', bandB: 'rgba(90,90,90,.18)',
+    target: '#c81024', shadowT: '#999',
+    weight: '#141414', glow: 'rgba(20,20,20,.22)', dot: '#c81024',
   },
 };
 const pal = () => document.body.classList.contains('light') ? PAL.light : PAL.dark;
@@ -1129,7 +1129,7 @@ function drawChart() {
   const X = t => padL + ((t - tMin) / (tMax - tMin)) * cw;
   const Yw = v => padT + ch - (Math.max(0, v) / wMax) * ch;
 
-  ctx.font = '9px "Space Mono"';
+  ctx.font = '10px "Space Mono"';
   ctx.fillStyle = C.axis;
   ctx.textAlign = 'left';
   for (let g = 0; g <= wMax; g += 50) ctx.fillText(g, 2, Yw(g) + 3);
