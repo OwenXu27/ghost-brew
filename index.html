@@ -379,9 +379,9 @@ const I18N = {
     guideNone: 'NONE', grpTargets: 'TARGETS', grpShadows: 'SHADOWS',
     recipes: 'Recipes', importB: 'Import', exportB: 'Export',
     editor: 'Recipe Editor', namePh: 'RECIPE NAME',
-    shName: 'STAGE', shTime: 'BY TIME', shG: 'TARGET g', stageNamePh: 'STAGE NAME',
+    shName: 'STAGE', shTime: 'REF TIME', shG: 'TARGET g', stageNamePh: 'STAGE NAME',
     addStage: '+ Stage', addHold: '+ Hold', saveRecipe: 'Save Recipe', newR: 'New', delR: 'Delete',
-    editorHelp: 'PULSE RECIPE: A POUR STAGE RAISES GRAMS VS THE PREVIOUS STAGE (TARGET RAMPS UP); A WAIT STAGE KEEPS GRAMS EQUAL (TARGET STAYS FLAT). + HOLD COPIES THE PREVIOUS WEIGHT — JUST CHANGE THE TIME.',
+    editorHelp: 'PULSE RECIPE: A POUR STAGE RAISES GRAMS VS THE PREVIOUS STAGE AND ADVANCES WHEN THE SCALE ACTUALLY HITS THE TARGET; A WAIT STAGE KEEPS GRAMS EQUAL AND ADVANCES AFTER (STAGE TIME − PREVIOUS STAGE TIME) SECONDS. TIMES ONLY PLACE THE STAGE LINES ON THE CHART.',
     qiLabel: 'Quick Import — Paste Text',
     qiPh: 'bloom 0:45 50g\npour 1 1:15 120g\npour 2 1:50 190g\ndrawdown 2:30 240g\n\nalso: 闷蒸 45秒 50克 / 2:00 → 240',
     qiParse: 'Parse + Save',
@@ -391,8 +391,8 @@ const I18N = {
     noBrews: 'NO BREWS ARCHIVED', noRecipes: 'NO RECIPES',
     btnShadow: 'Shadow', btnDel: 'Del', btnTarget: 'Target', btnEdit: 'Edit', btnDup: 'Dup',
     copySuffix: ' COPY', stagesUnit: 'STAGES',
-    stagePour: (n, g, t) => '▸ POUR ' + n + ' → ' + g + 'g @ ' + t,
-    stageWait: (n, g) => '▸ WAIT ' + n + ' · HOLD ' + g + 'g',
+    stagePour: (n, g, left) => '▸ POUR ' + n + ' → ' + g + 'g · ' + left + 'g TO GO',
+    stageWait: (n, g, s) => '▸ WAIT ' + n + ' · HOLD ' + g + 'g · ' + s + 's LEFT',
     stageDoneL: '▸ DONE',
     speakStop: 'stop pouring', speakDone: 'done', speakPour: 'pour',
     waiting: 'WAITING FOR DEVICE', offline: 'OFFLINE',
@@ -405,7 +405,7 @@ const I18N = {
     recipeSaved: 'RECIPE SAVED', archived: 'ARCHIVED', parsed: 'PARSED',
     exported: 'EXPORTED', imported: 'IMPORTED', importErr: 'IMPORT ERR',
     recipesUnit: 'RECIPES', stagesTail: 'STAGES', resetDone: 'RESET DONE',
-    armed: '▸ ARMED — POUR TO AUTO-START', autoStart: 'AUTO-START // POUR DETECTED',
+    armed: '▸ ARMED — RECORDS WHEN THE SCALE STARTS',
     scaleStart: 'FOLLOWING SCALE // TIMER STARTED', scaleStop: 'FOLLOWING SCALE // TIMER STOPPED',
     demoMode: 'DEMO MODE // SIMULATED SCALE',
     holdName: 'HOLD',
@@ -428,9 +428,9 @@ const I18N = {
     guideNone: '无', grpTargets: '目标配方', grpShadows: '历史冲煮',
     recipes: '配方', importB: '导入', exportB: '导出',
     editor: '配方编辑器', namePh: '配方名称',
-    shName: '阶段', shTime: '截止时刻', shG: '目标克', stageNamePh: '阶段名称',
+    shName: '阶段', shTime: '参考时刻', shG: '目标克', stageNamePh: '阶段名称',
     addStage: '+ 注水段', addHold: '+ 等待段', saveRecipe: '保存配方', newR: '新建', delR: '删除',
-    editorHelp: '脉冲式配方：注水段 = 克重比上一段增加（目标线爬坡）；等待段 = 克重与上一段相同（目标线水平）。+ 等待段 自动复制上一段克重，只改时间即可。',
+    editorHelp: '脉冲式配方：注水段 = 克重比上一段增加，实际称重达到目标克数时才提示进入下一段；等待段 = 克重与上一段相同，从上段结束起等待（本段时刻 − 上段时刻）秒。时间仅用于在图表上定位阶段线。',
     qiLabel: '快速导入 — 粘贴文本',
     qiPh: '闷蒸 0:45 50g\n第一段 1:15 120g\n第二段 1:50 190g\n滴滤 2:30 240g\n\n也支持: bloom, 45s, 50g / 一段 90秒 120克 / 2:00 → 240',
     qiParse: '解析并保存',
@@ -440,8 +440,8 @@ const I18N = {
     noBrews: '暂无冲煮存档', noRecipes: '暂无配方',
     btnShadow: '影子', btnDel: '删除', btnTarget: '目标', btnEdit: '编辑', btnDup: '复制',
     copySuffix: ' 副本', stagesUnit: '段',
-    stagePour: (n, g, t) => '▸ 注水 ' + n + ' → ' + g + '克 @ ' + t,
-    stageWait: (n, g) => '▸ 等待 ' + n + ' · 保持 ' + g + '克',
+    stagePour: (n, g, left) => '▸ 注水 ' + n + ' → ' + g + '克 · 还差 ' + left + '克',
+    stageWait: (n, g, s) => '▸ 等待 ' + n + ' · 保持 ' + g + '克 · 剩 ' + s + '秒',
     stageDoneL: '▸ 完成',
     speakStop: '停止注水', speakDone: '完成', speakPour: '注水',
     waiting: '等待连接设备', offline: '离线',
@@ -454,7 +454,7 @@ const I18N = {
     recipeSaved: '配方已保存', archived: '已存档', parsed: '解析完成',
     exported: '已导出', imported: '已导入', importErr: '导入失败',
     recipesUnit: '个配方', stagesTail: '个阶段', resetDone: '已重置',
-    armed: '▸ 已待命 — 开始注水即自动开始', autoStart: '自动开始 // 检测到注水',
+    armed: '▸ 已待命 — 秤开始计时即自动记录',
     scaleStart: '跟随秤状态 // 计时已开始', scaleStop: '跟随秤状态 // 计时已结束',
     demoMode: '演示模式 // 模拟电子秤',
     holdName: '等待',
@@ -506,7 +506,7 @@ let tolerance = 5, soundOn = false;
 let appMode = 'dose', doseWeight = 0, doseAuto = false;
 let stabRef = 0, stabSince = 0;      // running stability tracker (idle only)
 let autoDose = 0, autoDoseAt = 0;    // last stable plateau in bean range
-let stageIdx = 0, audioCtx = null;
+let stageIdx = 0, stageStartT = 0, audioCtx = null;
 
 const $ = id => document.getElementById(id);
 const els = {
@@ -701,13 +701,9 @@ function onData(e) {
     lastFlow = flowSm;
     els.flow.textContent = lastFlow.toFixed(1);
     if (recording) { fSamples.push({ t, v: lastFlow }); trimSamples(); }
-    /* guide armed + water starts flowing onto a tared scale → auto-start */
-    else if (ghost && flowSm > 0.8 && lastWeight > -2 && lastWeight < 5 &&
-             $('modal').classList.contains('hidden')) {
-      foot(T().autoStart);
-      send(CMD.START);
-      startRecording();
-    }
+    /* no app-side flow heuristic: any weight activity (beans, dripper, kettle)
+       spikes the flow reading, so guessing here false-starts the recording.
+       auto-start follows the scale's own timer only ('C' message / W ms). */
   } else if (head === 0x43 && bytes.length >= 3) {    // 'C' timer state
     /* the scale's own state machine: started/stopped by its button, by the
        pour-over page's flow auto-detect (>0.3 g/s) or by its dripper-removal
@@ -774,8 +770,16 @@ function updateCoach(t, g) {
   if (ghost.type === 'recipe') {
     const stages = ghost.obj.stages;
     const isPour = i => i >= 0 && stages[i] && stages[i].g > (i === 0 ? 0 : stages[i - 1].g);
-    while (stageIdx < stages.length && t >= stages[stageIdx].t) {
+    /* wait-stage length = stage time − previous stage time (floor 5s) */
+    const dur = i => Math.max(5, stages[i].t - (i > 0 ? stages[i - 1].t : 0));
+    /* pour stages advance on WEIGHT — the cue fires when the scale actually
+       hits the target grams; wait stages advance on DURATION from the moment
+       the previous stage completed. Times only place the chart stage lines. */
+    while (stageIdx < stages.length &&
+           (isPour(stageIdx) ? g >= stages[stageIdx].g
+                             : t >= stageStartT + dur(stageIdx))) {
       stageIdx++;
+      stageStartT = t;
       const next = stages[stageIdx];
       beep(next ? (isPour(stageIdx) ? 880 : 520) : 440, 0.15);
       speak(next
@@ -785,8 +789,8 @@ function updateCoach(t, g) {
     const cur = stages[stageIdx];
     els.stageLine.textContent = cur
       ? (isPour(stageIdx)
-          ? T().stagePour(cur.name, cur.g, fmtTime(cur.t * 1000).slice(0, 5))
-          : T().stageWait(cur.name, cur.g))
+          ? T().stagePour(cur.name, cur.g, Math.max(0, cur.g - g).toFixed(1))
+          : T().stageWait(cur.name, cur.g, Math.max(0, Math.ceil(stageStartT + dur(stageIdx) - t))))
       : T().stageDoneL;
   }
 }
@@ -804,7 +808,7 @@ function startRecording() {
     els.btnDose.textContent = T().reDose;
   }
   wSamples.length = 0; fSamples.length = 0;
-  recSamples = []; stageIdx = 0;
+  recSamples = []; stageIdx = 0; stageStartT = 0;
   yMaxW = 50; yMaxF = 8; flowSm = 0;
   recording = true;
   els.recLed.classList.add('rec');
@@ -1381,7 +1385,7 @@ els.reset.onclick = async () => {
   await send(CMD.STOP);
   await send(CMD.RESET);
   wSamples.length = 0; fSamples.length = 0;
-  recSamples = []; stageIdx = 0;
+  recSamples = []; stageIdx = 0; stageStartT = 0;
   yMaxW = 50; yMaxF = 8; flowSm = 0; lastFlow = 0; scaleTimer = false;
   autoDose = 0; doseWeight = 0; doseAuto = false;
   appMode = 'dose';
