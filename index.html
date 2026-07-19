@@ -950,7 +950,9 @@ function drawChart() {
       ctx.fillRect(x, y, 1, 1);
 
   const tNow = recording ? now() : tFrozen;   // frozen pre-brew (0) and post-stop
-  /* fixed-width sliding time window: never compresses mid-brew */
+  /* anchored compress-to-fit: the window only grows — with the guide's length
+     and the elapsed time — so the whole brew, t=0 → now, is always on screen.
+     The curve gently compresses (<1%/s) instead of sliding history off-view. */
   let winW = 120;
   if (ghost) {
     const gEnd = ghost.type === 'recipe'
@@ -958,8 +960,8 @@ function drawChart() {
       : ghost.obj.duration;
     winW = Math.max(120, gEnd + 15);
   }
-  const tMin = Math.max(0, tNow - winW);
-  const tMax = tMin + winW;
+  winW = Math.max(winW, tNow + 12);
+  const tMin = 0, tMax = winW;
 
   /* sticky Y scales: only grow, reset on brew start / guide change */
   let gMaxW = 0;
@@ -982,7 +984,7 @@ function drawChart() {
   ctx.textAlign = 'left';
   for (let g = 0; g <= wMax; g += 50) ctx.fillText(g, 2, Yw(g) + 3);
   ctx.textAlign = 'center';
-  const tStep = winW > 180 ? 60 : 30;
+  const tStep = winW > 420 ? 120 : winW > 180 ? 60 : 30;
   for (let ts = Math.ceil(tMin / tStep) * tStep; ts <= tMax; ts += tStep)
     ctx.fillText(fmtTime(ts * 1000).slice(0, 5), X(ts), h - 4);
 
