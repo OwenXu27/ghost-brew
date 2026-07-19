@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GHOST BREW // ECLAIR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000; --fg: #f2f2f2; --dim: #555; --faint: #2a2a2a;
+    --line: #1a1a1a; --red: #ff2436;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: 'Space Mono', monospace;
+    display: flex; flex-direction: column; height: 100dvh;
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: radial-gradient(#111 1px, transparent 1px);
+    background-size: 6px 6px; pointer-events: none; z-index: 0;
+  }
+  /* ── light theme ────────────────────── */
+  body.light { --bg: #f2f2f0; --fg: #141414; --dim: #8a8a8a; --faint: #c4c4c0; --line: #dcdcd8; --red: #e01e2b; }
+  body.light::before { background-image: radial-gradient(#dededa 1px, transparent 1px); }
+  body.light select, body.light input[type=text], body.light input[type=number], body.light textarea { background: #fff; }
+  body.light button:disabled { border-color: #d4d4d0; }
+  body.light button.primary:hover:not(:disabled) { color: #fff; }
+  body.light .row:hover { background: #e9e9e5; }
+  body.light .modal { background: rgba(242,242,240,.82); }
+  body.light .modal-box { background: #fff; box-shadow: 0 0 40px rgba(224,30,43,.12); }
+  body.light #weight { text-shadow: 0 0 24px rgba(20,20,20,.12); }
+  body.light footer { color: #a8a8a4; }
+
+  main { position: relative; z-index: 1; display: flex; flex-direction: column; flex: 1; }
+  .dot { font-family: 'DotGothic16', monospace; }
+  .label { font-size: 10px; letter-spacing: 0.35em; text-transform: uppercase; color: var(--dim); }
+  .red { color: var(--red); }
+  .hidden { display: none !important; }
+
+  /* ── header / nav ───────────────────── */
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 28px; border-bottom: 1px solid var(--line);
+  }
+  .brand { font-family: 'DotGothic16', monospace; font-size: 18px; letter-spacing: 0.25em; }
+  .brand .red { text-shadow: 0 0 12px rgba(255,36,54,.6); }
+  .status-cluster { display: flex; align-items: center; gap: 28px; }
+  .status-item { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .15em; color: var(--dim); }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); transition: .3s; }
+  .led.on { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .led.rec { background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .15; } }
+
+  nav {
+    display: flex; gap: 32px; padding: 0 28px;
+    border-bottom: 1px solid var(--line);
+  }
+  nav button {
+    border: none; background: none; padding: 10px 2px 9px;
+    font-size: 11px; letter-spacing: .3em; color: var(--dim);
+    border-bottom: 1px solid transparent; cursor: pointer;
+  }
+  nav button:hover { color: var(--fg); box-shadow: none; }
+  nav button.active { color: var(--red); border-bottom-color: var(--red); }
+
+  .view { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }
+  #view-brew { overflow-y: auto; }
+
+  /* ── readout ────────────────────────── */
+  .readout { display: flex; flex-direction: column; align-items: center; padding: 16px 20px 10px; }
+  .quad {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    width: min(1120px, 100%);
+  }
+  .cell { padding: 4px 10px 2px; text-align: center; border-left: 1px solid var(--line); min-width: 0; container-type: inline-size; }
+  .cell:first-child { border-left: none; }
+  .cell .label { display: block; margin-bottom: 8px; }
+  .qv {
+    font-size: clamp(34px, 7vh, 64px);            /* fallback: no cqi support */
+    font-size: clamp(30px, min(7vh, 26cqi), 64px); /* never wider than the cell */
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #weight { text-shadow: 0 0 24px rgba(242,242,242,.15); }
+  #weight.neg, #weight.warn { color: var(--red); text-shadow: 0 0 24px rgba(255,36,54,.4); }
+  .qv.red { color: var(--red); text-shadow: 0 0 12px rgba(255,36,54,.35); }
+  .sub-row { display: flex; gap: 28px; margin-top: 12px; font-size: 12px; letter-spacing: .15em; flex-wrap: wrap; justify-content: center; }
+  .sub-row .val { color: var(--fg); font-weight: 700; }
+  .sub-row .val.red { text-shadow: 0 0 10px rgba(255,36,54,.5); }
+  #stage-line { margin-top: 8px; font-size: 11px; letter-spacing: .25em; color: var(--red); min-height: 15px; }
+
+  /* ── controls ───────────────────────── */
+  .controls { display: flex; justify-content: center; gap: 12px; padding: 2px 20px 8px; flex-wrap: wrap; }
+  button {
+    font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 0.3em;
+    text-transform: uppercase; color: var(--fg); background: transparent;
+    border: 1px solid var(--faint); padding: 12px 24px 12px 28px; cursor: pointer;
+    transition: border-color .2s, color .2s, box-shadow .2s;
+  }
+  button:hover:not(:disabled) { border-color: var(--red); color: var(--red); box-shadow: 0 0 16px rgba(255,36,54,.15); }
+  button:disabled { color: var(--faint); border-color: #141414; cursor: default; }
+  button.primary { border-color: var(--red); color: var(--red); }
+  button.primary:hover:not(:disabled) { background: var(--red); color: #000; }
+  button.mini { padding: 6px 12px 6px 15px; font-size: 9px; }
+  button.toggled { border-color: var(--red); color: var(--red); }
+
+  select, input[type=text], input[type=number] {
+    font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .1em;
+    background: #050505; color: var(--fg); border: 1px solid var(--faint);
+    padding: 8px 10px; outline: none;
+  }
+  textarea {
+    font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .05em;
+    background: #050505; color: var(--fg); border: 1px solid var(--faint);
+    padding: 10px; outline: none; resize: vertical; line-height: 1.8;
+  }
+  textarea:focus { border-color: var(--red); }
+  select:focus, input:focus { border-color: var(--red); }
+  input[type=number] { width: 64px; }
+
+  /* ── chart ──────────────────────────── */
+  .chart-wrap {
+    flex: 1 1 auto; border-top: 1px solid var(--line);
+    padding: 12px 28px 6px; display: flex; flex-direction: column;
+    min-height: 120px;
+  }
+  .chart-body { flex: 1; position: relative; min-height: 0; }
+  .chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px 18px; }
+  .chart-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .chart-tools select { max-width: 180px; }
+  .legend { display: flex; gap: 20px; font-size: 9px; letter-spacing: .15em; color: var(--dim); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 16px; vertical-align: middle; margin-right: 6px; }
+  .legend .w { border-top: 2px solid var(--fg); }
+  .legend .t { border-top: 1px dashed var(--red); }
+  .legend .g { border-top: 1px dashed var(--dim); }
+  /* absolute positioning: canvas can never push the layout taller */
+  #chart { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ── archive / coach lists ──────────── */
+  .panel { padding: 28px; display: flex; flex-direction: column; gap: 2px; }
+  .row {
+    display: flex; align-items: center; gap: 20px;
+    padding: 14px 6px; border-bottom: 1px solid var(--line);
+    font-size: 12px; letter-spacing: .08em;
+  }
+  .row:hover { background: #080808; }
+  .row.active .name { color: var(--red); }
+  .row .name { flex: 1; font-weight: 700; letter-spacing: .15em; }
+  .row .meta { color: var(--dim); font-size: 10px; letter-spacing: .15em; white-space: nowrap; }
+  .empty { padding: 60px 0; text-align: center; color: var(--faint); font-size: 11px; letter-spacing: .3em; }
+  .panel-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 22px 28px 0;
+  }
+
+  /* ── coach editor ───────────────────── */
+  .editor { padding: 28px; display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+  .stage-row { display: flex; gap: 10px; align-items: center; }
+  .stage-row input[type=text] { flex: 1; min-width: 0; }
+  .stage-row input.t { width: 76px; }
+  .stage-row input.g { width: 76px; }
+  .stage-head { display: flex; gap: 10px; font-size: 9px; letter-spacing: .25em; color: var(--dim); }
+  .stage-head span:nth-child(1) { flex: 1; }
+  .stage-head span:nth-child(2) { width: 76px; }
+  .stage-head span:nth-child(3) { width: 76px; }
+  .editor-actions { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+
+  /* ── modal ──────────────────────────── */
+  .modal {
+    position: fixed; inset: 0; z-index: 10;
+    background: rgba(0,0,0,.85); display: flex;
+    align-items: center; justify-content: center;
+  }
+  .modal-box {
+    border: 1px solid var(--red); background: #000; padding: 32px;
+    display: flex; flex-direction: column; gap: 18px; width: min(420px, 90vw);
+    box-shadow: 0 0 40px rgba(255,36,54,.15);
+  }
+  .modal-box input { width: 100%; }
+  .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+  footer {
+    display: flex; justify-content: space-between; padding: 12px 28px;
+    border-top: 1px solid var(--line); font-size: 9px; letter-spacing: .25em; color: #333;
+  }
+
+  /* ── responsive ─────────────────────── */
+  @media (max-width: 600px) {
+    header { padding: 12px 16px; }
+    .brand { font-size: 15px; }
+    .status-cluster { gap: 14px; }
+    .status-item { font-size: 10px; }
+    .status-item:nth-child(5) span { display: none; }
+    .quad { grid-template-columns: repeat(2, 1fr); }
+    .cell { border-left: none; border-top: 1px solid var(--line); padding: 10px 6px 4px; }
+    .cell:nth-child(-n+2) { border-top: none; }
+    .qv { font-size: clamp(30px, 9.5vw, 46px); }
+    nav { padding: 0 16px; gap: 20px; }
+    button { padding: 10px 16px 10px 19px; }
+    button.mini { padding: 6px 10px 6px 13px; }
+    .controls { gap: 8px; padding: 2px 12px 8px; }
+    .sub-row { gap: 16px; font-size: 11px; }
+    .chart-wrap { padding: 10px 10px 4px; }
+    .chart-tools { gap: 8px; }
+    .panel, .editor { padding-left: 16px; padding-right: 16px; }
+    .panel-head { padding: 18px 16px 0; }
+    footer { padding: 10px 16px; }
+  }
+  @media (max-height: 720px) {
+    .readout { padding: 10px 20px 8px; }
+    .qv { font-size: clamp(26px, 5.5vh, 46px); }
+    .sub-row { margin-top: 6px; }
+    #stage-line { margin-top: 4px; min-height: 13px; }
+    .chart-wrap { min-height: 140px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand">GHOST<span class="red">//</span>BREW</div>
+    <div class="status-cluster">
+      <button id="btn-lang" class="mini">EN</button>
+      <button id="btn-theme" class="mini">LIGHT</button>
+      <div class="status-item"><span id="bat">BAT ---%</span></div>
+      <div class="status-item"><div id="conn-led" class="led"></div><span id="conn-text">OFFLINE</span></div>
+      <div class="status-item"><div id="rec-led" class="led"></div><span>REC</span></div>
+    </div>
+  </header>
+
+  <nav>
+    <button data-view="brew" class="active">Brew</button>
+    <button data-view="archive">Archive</button>
+    <button data-view="coach">Coach</button>
+  </nav>
+
+  <!-- ═══ BREW VIEW ═══ -->
+  <section id="view-brew" class="view">
+    <div class="readout">
+      <div class="quad">
+        <div class="cell">
+          <span class="label" id="lbl-dose">Dose · g</span>
+          <div class="qv dot" id="dose">--</div>
+        </div>
+        <div class="cell">
+          <span class="label" id="lbl-time">Time</span>
+          <div class="qv dot" id="timer">00:00</div>
+        </div>
+        <div class="cell">
+          <span class="label" id="lbl-weight">Weight · g</span>
+          <div class="qv dot" id="weight">0.0</div>
+        </div>
+        <div class="cell">
+          <span class="label" id="lbl-flow">Flow · g/s</span>
+          <div class="qv dot red" id="flow">0.0</div>
+        </div>
+        <div class="cell">
+          <span class="label" id="lbl-ratio">Ratio</span>
+          <div class="qv dot red" id="ratio">--</div>
+        </div>
+      </div>
+      <div class="sub-row">
+        <div id="delta-wrap" class="hidden"><span class="label">Δ&nbsp;</span><span id="delta" class="val">--</span></div>
+      </div>
+      <div id="stage-line"></div>
+    </div>
+
+    <div class="controls">
+      <button id="btn-connect" class="primary">Connect</button>
+      <button id="btn-dose">Set Dose ▸</button>
+      <button id="btn-tare" disabled>Tare</button>
+      <button id="btn-start" disabled>Start</button>
+      <button id="btn-stop" disabled>Stop</button>
+      <button id="btn-reset" disabled>Reset</button>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-head">
+        <div class="label" id="chart-title">Brew Curve</div>
+        <div class="legend">
+          <span><i class="w"></i><span id="leg-w">WEIGHT g</span></span>
+          <span><i class="t"></i><span id="leg-t">TARGET</span></span>
+          <span><i class="g"></i><span id="leg-s">SHADOW</span></span>
+        </div>
+        <div class="chart-tools">
+          <span class="label" id="guide-label">Guide</span>
+          <select id="ghost-sel"><option value="none">NONE</option></select>
+          <span class="label" id="tol-label">TOL ±g</span>
+          <input type="number" id="tol" value="5" min="1" max="50">
+          <button id="btn-sound" class="mini">Sound Off</button>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="chart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ═══ ARCHIVE VIEW ═══ -->
+  <section id="view-archive" class="view hidden">
+    <div class="panel" id="archive-list"></div>
+  </section>
+
+  <!-- ═══ COACH VIEW ═══ -->
+  <section id="view-coach" class="view hidden">
+    <div class="panel-head">
+      <span class="label" id="coach-label">Recipes</span>
+      <div style="display:flex;gap:10px">
+        <button id="r-import" class="mini">Import</button>
+        <button id="r-export" class="mini">Export</button>
+      </div>
+      <input type="file" id="r-file" accept=".json,application/json" class="hidden">
+    </div>
+    <div class="panel" id="recipe-list"></div>
+    <div class="editor" id="recipe-editor">
+      <div class="label" id="editor-label">Recipe Editor</div>
+      <input type="text" id="r-name" placeholder="RECIPE NAME" spellcheck="false">
+      <div class="stage-head"><span id="sh-name">STAGE</span><span id="sh-time">BY TIME</span><span id="sh-g">TARGET g</span><span></span></div>
+      <div id="stages"></div>
+      <div class="editor-actions">
+        <button id="r-add" class="mini">+ Stage</button>
+        <button id="r-add-hold" class="mini">+ Hold</button>
+        <button id="r-save" class="mini primary">Save Recipe</button>
+        <button id="r-new" class="mini">New</button>
+        <button id="r-del" class="mini">Delete</button>
+      </div>
+      <div class="label" id="editor-help" style="margin-top:10px"></div>
+    </div>
+
+    <div class="editor" style="border-top:1px solid var(--line)">
+      <div class="label" id="qi-label">Quick Import — Paste Text</div>
+      <textarea id="qi-text" rows="6" spellcheck="false"></textarea>
+      <div class="editor-actions">
+        <input type="text" id="qi-name" placeholder="RECIPE NAME" spellcheck="false" style="flex:1;min-width:160px">
+        <button id="qi-parse" class="mini primary">Parse + Save</button>
+      </div>
+      <div id="qi-preview" class="label" style="white-space:pre;line-height:1.9;letter-spacing:.1em"></div>
+    </div>
+  </section>
+
+  <!-- ═══ SAVE MODAL ═══ -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="label red" id="modal-label">Save Brew</div>
+      <input type="text" id="brew-name" spellcheck="false">
+      <div class="modal-actions">
+        <button id="m-discard" class="mini">Discard</button>
+        <button id="m-save" class="mini primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>ECLAIR BLE PROTOCOL // FW 2.1.0+</span>
+    <span id="footer-msg">WAITING FOR DEVICE</span>
+  </footer>
+</main>
+
+<script>
+'use strict';
+
+const DEMO = location.search.includes('demo');
+
+/* ── i18n ───────────────────────────────────────────── */
+const I18N = {
+  en: {
+    navBrew: 'Brew', navArchive: 'Archive', navCoach: 'Coach',
+    time: 'Time', weightL: 'Weight · g', flowL: 'Flow · g/s',
+    doseL: 'Dose · g', ratioL: 'Ratio',
+    connect: 'Connect', disconnect: 'Disconnect',
+    setDose: 'Set Dose ▸', reDose: '↺ Re-Dose',
+    tare: 'Tare', start: 'Start', stop: 'Stop', reset: 'Reset',
+    guide: 'Guide', tol: 'TOL ±g', soundOn: 'Sound On', soundOff: 'Sound Off',
+    chartTitle: 'Brew Curve', legW: 'WEIGHT g', legT: 'TARGET', legS: 'SHADOW',
+    guideNone: 'NONE', grpTargets: 'TARGETS', grpShadows: 'SHADOWS',
+    recipes: 'Recipes', importB: 'Import', exportB: 'Export',
+    editor: 'Recipe Editor', namePh: 'RECIPE NAME',
+    shName: 'STAGE', shTime: 'BY TIME', shG: 'TARGET g', stageNamePh: 'STAGE NAME',
+    addStage: '+ Stage', addHold: '+ Hold', saveRecipe: 'Save Recipe', newR: 'New', delR: 'Delete',
+    editorHelp: 'PULSE RECIPE: A POUR STAGE RAISES GRAMS VS THE PREVIOUS STAGE (TARGET RAMPS UP); A WAIT STAGE KEEPS GRAMS EQUAL (TARGET STAYS FLAT). + HOLD COPIES THE PREVIOUS WEIGHT — JUST CHANGE THE TIME.',
+    qiLabel: 'Quick Import — Paste Text',
+    qiPh: 'bloom 0:45 50g\npour 1 1:15 120g\npour 2 1:50 190g\ndrawdown 2:30 240g\n\nalso: 闷蒸 45秒 50克 / 2:00 → 240',
+    qiParse: 'Parse + Save',
+    qiNone: 'NO STAGES FOUND — each line needs at least a gram value, e.g. "bloom 0:45 50g"',
+    qiSaved: 'SAVED',
+    saveBrew: 'Save Brew', saveB: 'Save', discardB: 'Discard',
+    noBrews: 'NO BREWS ARCHIVED', noRecipes: 'NO RECIPES',
+    btnShadow: 'Shadow', btnDel: 'Del', btnTarget: 'Target', btnEdit: 'Edit', btnDup: 'Dup',
+    copySuffix: ' COPY', stagesUnit: 'STAGES',
+    stagePour: (n, g, t) => '▸ POUR ' + n + ' → ' + g + 'g @ ' + t,
+    stageWait: (n, g) => '▸ WAIT ' + n + ' · HOLD ' + g + 'g',
+    stageDoneL: '▸ DONE',
+    speakStop: 'stop pouring', speakDone: 'done', speakPour: 'pour',
+    waiting: 'WAITING FOR DEVICE', offline: 'OFFLINE',
+    connected: 'CONNECTED', disconnected: 'DISCONNECTED',
+    autoConn: 'AUTO-CONNECTING', autoConnFail: 'AUTO-CONNECT FAILED // USE CONNECT BUTTON',
+    err: 'ERR', noBt: 'ERR // WEB BLUETOOTH NOT SUPPORTED (USE CHROME/EDGE)',
+    doseErr: 'DOSE ERR // PUT BEANS ON SCALE FIRST',
+    autoDose: g => 'AUTO-DOSE // ' + g + 'g STABLE — WILL ADOPT AT BREW START',
+    doseSet: g => 'DOSE SET // ' + g + 'g — TARE & START',
+    recipeSaved: 'RECIPE SAVED', archived: 'ARCHIVED', parsed: 'PARSED',
+    exported: 'EXPORTED', imported: 'IMPORTED', importErr: 'IMPORT ERR',
+    recipesUnit: 'RECIPES', stagesTail: 'STAGES', resetDone: 'RESET DONE',
+    armed: '▸ ARMED — POUR TO AUTO-START', autoStart: 'AUTO-START // POUR DETECTED',
+    scaleStart: 'FOLLOWING SCALE // TIMER STARTED', scaleStop: 'FOLLOWING SCALE // TIMER STOPPED',
+    demoMode: 'DEMO MODE // SIMULATED SCALE',
+    holdName: 'HOLD',
+    defStages: [
+      { name: 'BLOOM POUR', t: 45, g: 50 }, { name: 'BLOOM WAIT', t: 60, g: 50 },
+      { name: 'POUR 1', t: 75, g: 120 }, { name: 'DRAWDOWN', t: 90, g: 120 },
+      { name: 'POUR 2', t: 110, g: 190 }, { name: 'DRAWDOWN', t: 125, g: 190 },
+      { name: 'POUR 3', t: 145, g: 240 }, { name: 'DRIP', t: 200, g: 240 },
+    ],
+  },
+  zh: {
+    navBrew: '冲煮', navArchive: '存档', navCoach: '教练',
+    time: '时间', weightL: '重量 · 克', flowL: '流速 · 克/秒',
+    doseL: '粉量 · 克', ratioL: '水粉比',
+    connect: '连接', disconnect: '断开',
+    setDose: '锁定粉量 ▸', reDose: '↺ 重新称豆',
+    tare: '去皮', start: '开始', stop: '停止', reset: '重置',
+    guide: '引导曲线', tol: '容差 ±克', soundOn: '声音 开', soundOff: '声音 关',
+    chartTitle: '冲煮曲线', legW: '重量 克', legT: '目标', legS: '影子',
+    guideNone: '无', grpTargets: '目标配方', grpShadows: '历史冲煮',
+    recipes: '配方', importB: '导入', exportB: '导出',
+    editor: '配方编辑器', namePh: '配方名称',
+    shName: '阶段', shTime: '截止时刻', shG: '目标克', stageNamePh: '阶段名称',
+    addStage: '+ 注水段', addHold: '+ 等待段', saveRecipe: '保存配方', newR: '新建', delR: '删除',
+    editorHelp: '脉冲式配方：注水段 = 克重比上一段增加（目标线爬坡）；等待段 = 克重与上一段相同（目标线水平）。+ 等待段 自动复制上一段克重，只改时间即可。',
+    qiLabel: '快速导入 — 粘贴文本',
+    qiPh: '闷蒸 0:45 50g\n第一段 1:15 120g\n第二段 1:50 190g\n滴滤 2:30 240g\n\n也支持: bloom, 45s, 50g / 一段 90秒 120克 / 2:00 → 240',
+    qiParse: '解析并保存',
+    qiNone: '没有解析到阶段 — 每行至少要有克数，例如「闷蒸 0:45 50g」',
+    qiSaved: '已保存',
+    saveBrew: '保存本次冲煮', saveB: '保存', discardB: '丢弃',
+    noBrews: '暂无冲煮存档', noRecipes: '暂无配方',
+    btnShadow: '影子', btnDel: '删除', btnTarget: '目标', btnEdit: '编辑', btnDup: '复制',
+    copySuffix: ' 副本', stagesUnit: '段',
+    stagePour: (n, g, t) => '▸ 注水 ' + n + ' → ' + g + '克 @ ' + t,
+    stageWait: (n, g) => '▸ 等待 ' + n + ' · 保持 ' + g + '克',
+    stageDoneL: '▸ 完成',
+    speakStop: '停止注水', speakDone: '完成', speakPour: '注水',
+    waiting: '等待连接设备', offline: '离线',
+    connected: '已连接', disconnected: '已断开',
+    autoConn: '正在自动连接', autoConnFail: '自动连接失败 // 请手动点连接',
+    err: '错误', noBt: '错误 // 此浏览器不支持网页蓝牙（请用 CHROME/EDGE）',
+    doseErr: '错误 // 请先放上豆子',
+    autoDose: g => '粉量自动识别 // ' + g + '克（稳定重量）— 冲煮时自动采用',
+    doseSet: g => '粉量已锁定 // ' + g + '克 — 去皮后开始',
+    recipeSaved: '配方已保存', archived: '已存档', parsed: '解析完成',
+    exported: '已导出', imported: '已导入', importErr: '导入失败',
+    recipesUnit: '个配方', stagesTail: '个阶段', resetDone: '已重置',
+    armed: '▸ 已待命 — 开始注水即自动开始', autoStart: '自动开始 // 检测到注水',
+    scaleStart: '跟随秤状态 // 计时已开始', scaleStop: '跟随秤状态 // 计时已结束',
+    demoMode: '演示模式 // 模拟电子秤',
+    holdName: '等待',
+    defStages: [
+      { name: '闷蒸注水', t: 45, g: 50 }, { name: '闷蒸等待', t: 60, g: 50 },
+      { name: '第一段注水', t: 75, g: 120 }, { name: '等待下水', t: 90, g: 120 },
+      { name: '第二段注水', t: 110, g: 190 }, { name: '等待下水', t: 125, g: 190 },
+      { name: '第三段注水', t: 145, g: 240 }, { name: '滴滤', t: 200, g: 240 },
+    ],
+  },
+};
+let lang = 'zh';
+const T = () => I18N[lang];
+
+/* ── protocol ───────────────────────────────────────── */
+const SERVICE_UUID = 'b905eaea-2e63-0e04-7582-7913f10d8f81';
+const CHAR_CONFIG  = '4f9a45ba-8e1b-4e07-e157-0814d393b968';
+const CHAR_DATA    = 'ad736c5f-bbc9-1f96-d304-cb5d5f41e160';
+const CMD = { TARE: 0x54, RESET: 0x52, START: 0x53, STOP: 0x45 };
+
+function buildMsg(header, payload) {
+  const buf = new Uint8Array(2 + payload.length);
+  buf[0] = header;
+  let xor = 0;
+  payload.forEach((b, i) => { buf[1 + i] = b; xor ^= b; });
+  buf[buf.length - 1] = xor;
+  return buf;
+}
+function verifyXor(bytes) {
+  let xor = 0;
+  for (let i = 1; i < bytes.length - 1; i++) xor ^= bytes[i];
+  return xor === bytes[bytes.length - 1];
+}
+
+/* ── state ──────────────────────────────────────────── */
+let device = null, configChar = null, dataChar = null;
+let manualDisc = false;
+let t0 = performance.now();
+let tFrozen = 0;             // chart clock when not recording (0 = pre-brew preview)
+const wSamples = [], fSamples = [];
+let lastFlow = 0, lastWeight = 0, flowSm = 0;
+let prevMs = null;           // last timer value reported by the scale
+let yMaxW = 50, yMaxF = 8;
+let recording = false, recSamples = [];
+let scaleTimer = false;        // the scale's own timer state, from 'C' notifications
+let ghost = null;            // {type:'recipe'|'brew', obj}
+let brewsCache = [], recipesCache = [];
+let tolerance = 5, soundOn = false;
+let appMode = 'dose', doseWeight = 0, doseAuto = false;
+let stabRef = 0, stabSince = 0;      // running stability tracker (idle only)
+let autoDose = 0, autoDoseAt = 0;    // last stable plateau in bean range
+let stageIdx = 0, audioCtx = null;
+
+const $ = id => document.getElementById(id);
+const els = {
+  weight: $('weight'), timer: $('timer'), flow: $('flow'), delta: $('delta'),
+  deltaWrap: $('delta-wrap'), stageLine: $('stage-line'),
+  bat: $('bat'), connLed: $('conn-led'), connText: $('conn-text'), recLed: $('rec-led'),
+  footer: $('footer-msg'),
+  connect: $('btn-connect'), tare: $('btn-tare'), start: $('btn-start'),
+  stop: $('btn-stop'), reset: $('btn-reset'),
+  ghostSel: $('ghost-sel'), tol: $('tol'), sound: $('btn-sound'),
+  dose: $('dose'), ratio: $('ratio'), btnDose: $('btn-dose'),
+  btnLang: $('btn-lang'), btnTheme: $('btn-theme'),
+  btnLang: $('btn-lang'), btnTheme: $('btn-theme'),
+};
+
+const now = () => (performance.now() - t0) / 1000;
+const foot = m => { els.footer.textContent = m; };
+
+/* ── storage (IndexedDB) ────────────────────────────── */
+let db = null;
+function openDB() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open('ghostbrew', 1);
+    rq.onupgradeneeded = e => {
+      const d = e.target.result;
+      d.createObjectStore('brews', { keyPath: 'id', autoIncrement: true });
+      d.createObjectStore('recipes', { keyPath: 'id', autoIncrement: true });
+      d.createObjectStore('kv', { keyPath: 'k' });
+    };
+    rq.onsuccess = () => { db = rq.result; res(db); };
+    rq.onerror = () => rej(rq.error);
+  });
+}
+function tx(store, mode, fn) {
+  return new Promise((res, rej) => {
+    const t = db.transaction(store, mode);
+    const r = fn(t.objectStore(store));
+    t.oncomplete = () => res(r ? r.result : undefined);
+    t.onerror = () => rej(t.error);
+  });
+}
+const putBrew   = b  => tx('brews', 'readwrite', s => s.put(b));
+const allBrews  = () => tx('brews', 'readonly',  s => s.getAll());
+const delBrew   = id => tx('brews', 'readwrite', s => s.delete(id));
+const putRecipe = r  => tx('recipes', 'readwrite', s => s.put(r));
+const allRecipes= () => tx('recipes', 'readonly',  s => s.getAll());
+const delRecipe = id => tx('recipes', 'readwrite', s => s.delete(id));
+const kvSet = (k, v) => tx('kv', 'readwrite', s => s.put({ k, v }));
+const kvGet = k => tx('kv', 'readonly', s => s.get(k)).then(r => r && r.v);
+
+/* ── audio / voice ──────────────────────────────────── */
+function ac() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function beep(freq = 880, dur = 0.09) {
+  if (!soundOn) return;
+  try {
+    const c = ac(), o = c.createOscillator(), g = c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.frequency.value = freq; o.type = 'square';
+    g.gain.setValueAtTime(0.06, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.start(); o.stop(c.currentTime + dur);
+  } catch (e) {}
+}
+function speak(text) {
+  if (!soundOn || !('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = /[一-鿿]/.test(text) ? 'zh-CN' : 'en-US';
+  u.rate = 1.1;
+  speechSynthesis.speak(u);
+}
+
+/* ── BLE ────────────────────────────────────────────── */
+async function attachDevice(d) {
+  device = d;
+  manualDisc = false;
+  device.addEventListener('gattserverdisconnected', onDisconnect);
+  const server = await device.gatt.connect();
+  const service = await server.getPrimaryService(SERVICE_UUID);
+  configChar = await service.getCharacteristic(CHAR_CONFIG);
+  dataChar = await service.getCharacteristic(CHAR_DATA);
+  await dataChar.startNotifications();
+  dataChar.addEventListener('characteristicvaluechanged', onData);
+  /* timer-state ('C') and battery ('B') notifications live on the CONFIG
+     characteristic — subscribing is what lets the app follow the scale's own
+     pour-over state machine (auto start/stop) instead of guessing from flow */
+  try {
+    await configChar.startNotifications();
+    configChar.addEventListener('characteristicvaluechanged', onData);
+  } catch (e) { /* older FW: heuristics below still cover auto-start */ }
+
+  els.connLed.classList.add('on');
+  els.connText.textContent = device.name || 'ECLAIR';
+  foot(T().connected + ' // ' + (device.name || ''));
+  els.connect.textContent = T().disconnect;
+  [els.tare, els.start, els.stop, els.reset].forEach(b => b.disabled = false);
+}
+async function connect() {
+  try {
+    const d = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'ECLAIR-' }],
+      optionalServices: [SERVICE_UUID],
+    });
+    await attachDevice(d);
+  } catch (err) {
+    foot(T().err + ' // ' + err.message);
+  }
+}
+/* silently reconnect to a previously-permitted scale — no picker */
+async function autoConnect() {
+  if (DEMO || !navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+  try {
+    const devs = await navigator.bluetooth.getDevices();
+    const d = devs.find(x => x.name && x.name.startsWith('ECLAIR-'));
+    if (!d || device) return;
+    foot(T().autoConn + ' // ' + d.name);
+    await attachDevice(d);
+  } catch (err) {
+    foot(T().autoConnFail);
+  }
+}
+function onDisconnect() {
+  if (recording) stopRecording(false);
+  device = null; configChar = null; dataChar = null;
+  yMaxW = 50; yMaxF = 8; flowSm = 0; scaleTimer = false;
+  els.connLed.classList.remove('on');
+  els.connText.textContent = T().offline;
+  foot(T().disconnected);
+  els.connect.textContent = T().connect;
+  [els.tare, els.start, els.stop, els.reset].forEach(b => b.disabled = true);
+  /* unintended drop (scale slept / out of range) → one silent retry */
+  if (!manualDisc) setTimeout(() => { if (!device && !manualDisc) autoConnect(); }, 2500);
+}
+async function send(header) {
+  if (configChar) await configChar.writeValue(buildMsg(header, [0x01]));
+}
+
+/* ── data parsing ───────────────────────────────────── */
+function fmtTime(ms) {
+  const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), d = Math.floor((ms % 1000) / 100);
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + '.' + d;
+}
+function onData(e) {
+  const v = new DataView(e.target.value.buffer);
+  const bytes = new Uint8Array(v.buffer);
+  if (bytes.length < 2 || !verifyXor(bytes)) return;
+  const head = bytes[0], t = now();
+
+  if (head === 0x57 && bytes.length >= 10) {          // 'W'
+    const g = v.getInt32(1, true) / 1000;
+    const ms = v.getUint32(5, true);
+    lastWeight = g;
+    els.weight.textContent = g.toFixed(1);
+    els.weight.classList.toggle('neg', g < 0);
+    /* app-side clock while brewing: runs even if the scale timer never started */
+    els.timer.textContent = fmtTime(recording ? Math.round(now() * 1000) : ms).slice(0, 5);
+    /* scale's own timer started (0 → climbing) → follow it, guide or not */
+    if (!recording && prevMs === 0 && ms > 0 &&
+        $('modal').classList.contains('hidden')) {
+      foot(T().scaleStart);
+      startRecording();
+    }
+    prevMs = ms;
+    /* passive dose sniffing: while idle, a stable plateau in bean range is
+       the scale's own dose-weighing step (手冲子页面一/二) — the protocol
+       doesn't broadcast it, so remember it and adopt it when a brew starts.
+       Dripper+server is always >100g, so it never false-triggers. */
+    if (!recording) {
+      if (Math.abs(g - stabRef) > 0.3) { stabRef = g; stabSince = t; }
+      else if (t - stabSince > 1.2 && g >= 5 && g <= 100 && Math.abs(g - autoDose) > 0.1) {
+        autoDose = g; autoDoseAt = Date.now();
+        if (appMode === 'dose') els.dose.textContent = '~' + g.toFixed(1);
+        foot(T().autoDose(g.toFixed(1)));
+      }
+    }
+    if (appMode === 'brew' && doseWeight > 0)
+      els.ratio.textContent = '1:' + Math.max(0, g / doseWeight).toFixed(1);
+    if (recording) {
+      /* curve only draws during an active brew, not from any scale activity */
+      wSamples.push({ t, v: g });
+      trimSamples();
+      recSamples.push({ t, w: g, f: lastFlow });
+      updateCoach(t, g);
+    }
+  } else if (head === 0x46 && bytes.length >= 10) {   // 'F'
+    const raw = v.getInt32(1, true) / 1000;
+    flowSm = flowSm * 0.65 + raw * 0.35;              // EMA smoothing
+    lastFlow = flowSm;
+    els.flow.textContent = lastFlow.toFixed(1);
+    if (recording) { fSamples.push({ t, v: lastFlow }); trimSamples(); }
+    /* guide armed + water starts flowing onto a tared scale → auto-start */
+    else if (ghost && flowSm > 0.8 && lastWeight > -2 && lastWeight < 5 &&
+             $('modal').classList.contains('hidden')) {
+      foot(T().autoStart);
+      send(CMD.START);
+      startRecording();
+    }
+  } else if (head === 0x43 && bytes.length >= 3) {    // 'C' timer state
+    /* the scale's own state machine: started/stopped by its button, by the
+       pour-over page's flow auto-detect (>0.3 g/s) or by its dripper-removal
+       auto-stop. Sent 3× per change → dedupe on actual transition. */
+    const running = bytes[1] === 0x01;
+    if (running === scaleTimer) return;
+    scaleTimer = running;
+    if (running) {
+      if (!recording && $('modal').classList.contains('hidden')) {
+        foot(T().scaleStart);
+        startRecording();
+      }
+    } else if (recording) {
+      foot(T().scaleStop);
+      stopRecording(true);
+    }
+  } else if (head === 0x42 && bytes.length >= 3) {    // 'B'
+    els.bat.textContent = 'BAT ' + String(bytes[1]).padStart(3, '0') + '%';
+  }
+}
+function trimSamples() {
+  const cutoff = now() - 600;
+  while (wSamples.length && wSamples[0].t < cutoff) wSamples.shift();
+  while (fSamples.length && fSamples[0].t < cutoff) fSamples.shift();
+}
+
+/* ── coach engine ───────────────────────────────────── */
+function recipePoints(r) {
+  return [{ t: 0, g: 0 }, ...r.stages.map(s => ({ t: s.t, g: s.g }))];
+}
+function targetAt(t) {
+  if (!ghost) return null;
+  if (ghost.type === 'recipe') {
+    const pts = recipePoints(ghost.obj);
+    if (t >= pts[pts.length - 1].t) return pts[pts.length - 1].g;
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (t <= pts[i + 1].t) {
+        const span = pts[i + 1].t - pts[i].t;
+        const k = span > 0 ? (t - pts[i].t) / span : 1;
+        return pts[i].g + k * (pts[i + 1].g - pts[i].g);
+      }
+    }
+    return 0;
+  }
+  // brew shadow: lerp between recorded samples
+  const s = ghost.obj.samples;
+  if (!s.length) return null;
+  if (t <= s[0].t) return s[0].w;
+  if (t >= s[s.length - 1].t) return s[s.length - 1].w;
+  let lo = 0, hi = s.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; s[mid].t <= t ? lo = mid : hi = mid; }
+  const k = (t - s[lo].t) / (s[hi].t - s[lo].t || 1);
+  return s[lo].w + k * (s[hi].w - s[lo].w);
+}
+function updateCoach(t, g) {
+  const target = targetAt(t);
+  if (target === null) return;
+  const d = g - target;
+  const over = Math.abs(d) > tolerance;
+  els.delta.textContent = (d >= 0 ? '+' : '') + d.toFixed(1) + 'g';
+  els.delta.style.color = over ? 'var(--red)' : 'var(--fg)';
+  els.weight.classList.toggle('warn', over);
+
+  if (ghost.type === 'recipe') {
+    const stages = ghost.obj.stages;
+    const isPour = i => i >= 0 && stages[i] && stages[i].g > (i === 0 ? 0 : stages[i - 1].g);
+    while (stageIdx < stages.length && t >= stages[stageIdx].t) {
+      stageIdx++;
+      const next = stages[stageIdx];
+      beep(next ? (isPour(stageIdx) ? 880 : 520) : 440, 0.15);
+      speak(next
+        ? (isPour(stageIdx) ? (lang === 'zh' ? next.name : T().speakPour) : T().speakStop)
+        : T().speakDone);
+    }
+    const cur = stages[stageIdx];
+    els.stageLine.textContent = cur
+      ? (isPour(stageIdx)
+          ? T().stagePour(cur.name, cur.g, fmtTime(cur.t * 1000).slice(0, 5))
+          : T().stageWait(cur.name, cur.g))
+      : T().stageDoneL;
+  }
+}
+
+/* ── recording ──────────────────────────────────────── */
+function startRecording() {
+  t0 = performance.now();           // re-zero both chart and record
+  tFrozen = 0;
+  /* adopt the sniffed dose unless the user locked one manually */
+  if ((!doseWeight || doseAuto) && autoDose && Date.now() - autoDoseAt < 5 * 60 * 1000) {
+    doseWeight = autoDose; doseAuto = true;
+    appMode = 'brew';
+    els.dose.textContent = doseWeight.toFixed(1);
+    els.ratio.textContent = '1:0.0';
+    els.btnDose.textContent = T().reDose;
+  }
+  wSamples.length = 0; fSamples.length = 0;
+  recSamples = []; stageIdx = 0;
+  yMaxW = 50; yMaxF = 8; flowSm = 0;
+  recording = true;
+  els.recLed.classList.add('rec');
+  els.start.disabled = true;
+  els.deltaWrap.classList.toggle('hidden', !ghost);
+  els.stageLine.textContent = '';
+  if (ghost && ghost.type === 'recipe' && ghost.obj.stages.length)
+    speak(lang === 'zh' ? ghost.obj.stages[0].name : T().speakPour);
+  beep(880);
+}
+function stopRecording(askSave = true) {
+  tFrozen = now();                  // freeze chart at brew end for review
+  recording = false;
+  els.recLed.classList.remove('rec');
+  els.start.disabled = !(device || DEMO);
+  els.weight.classList.remove('warn');
+  els.stageLine.textContent = ghost ? T().armed : '';   // re-arm for the next brew
+  if (askSave && recSamples.length > 50) {
+    const d = new Date();
+    $('brew-name').value =
+      'BREW ' + d.toISOString().slice(0, 10) + ' ' +
+      String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+    $('modal').classList.remove('hidden');
+  } else {
+    recSamples = [];
+  }
+}
+
+/* ── ghost select ───────────────────────────────────── */
+function rebuildGhostSel() {
+  const sel = els.ghostSel, cur = sel.value;
+  sel.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = 'none'; none.textContent = T().guideNone;
+  sel.appendChild(none);
+  if (recipesCache.length) {
+    const og = document.createElement('optgroup');
+    og.label = T().grpTargets;
+    recipesCache.forEach(r => {
+      const o = document.createElement('option');
+      o.value = 'r:' + r.id; o.textContent = r.name;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  }
+  if (brewsCache.length) {
+    const og = document.createElement('optgroup');
+    og.label = T().grpShadows;
+    brewsCache.slice().reverse().forEach(b => {
+      const o = document.createElement('option');
+      o.value = 'b:' + b.id; o.textContent = b.name;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  }
+  sel.value = cur;
+  if (!sel.selectedOptions.length || sel.value !== cur) sel.value = 'none';
+  applyGhostSel();
+}
+function applyGhostSel() {
+  const v = els.ghostSel.value;
+  if (v.startsWith('r:')) {
+    const r = recipesCache.find(x => 'r:' + x.id === v);
+    ghost = r ? { type: 'recipe', obj: r } : null;
+  } else if (v.startsWith('b:')) {
+    const b = brewsCache.find(x => 'b:' + x.id === v);
+    ghost = b ? { type: 'brew', obj: b } : null;
+  } else ghost = null;
+  yMaxW = 50;                       // re-fit Y axis to new guide
+  els.deltaWrap.classList.toggle('hidden', !ghost || !recording);
+  if (!recording) els.stageLine.textContent = ghost ? T().armed : '';
+  kvSet('guide', els.ghostSel.value);
+}
+els.ghostSel.onchange = applyGhostSel;
+els.tol.onchange = () => { tolerance = Math.max(1, +els.tol.value || 5); kvSet('tol', tolerance); };
+els.sound.onclick = () => {
+  soundOn = !soundOn;
+  els.sound.textContent = soundOn ? T().soundOn : T().soundOff;
+  els.sound.classList.toggle('toggled', soundOn);
+  kvSet('sound', soundOn);
+  if (soundOn) beep(880);
+};
+
+/* ── chart ──────────────────────────────────────────── */
+const PAL = {
+  dark: {
+    grid: '#161616', axis: '#444', base: '#222',
+    stage: '#241014', stageTxt: '#66333a',
+    bandR: 'rgba(255,36,54,.25)', bandB: 'rgba(120,120,120,.2)',
+    target: '#ff2436', shadowT: '#777',
+    weight: '#f2f2f2', glow: 'rgba(242,242,242,.4)', dot: '#ff2436',
+  },
+  light: {
+    grid: '#e2e2de', axis: '#999', base: '#ccc',
+    stage: '#f3d8da', stageTxt: '#c2777f',
+    bandR: 'rgba(224,30,43,.18)', bandB: 'rgba(90,90,90,.18)',
+    target: '#e01e2b', shadowT: '#999',
+    weight: '#141414', glow: 'rgba(20,20,20,.22)', dot: '#e01e2b',
+  },
+};
+const pal = () => document.body.classList.contains('light') ? PAL.light : PAL.dark;
+
+const canvas = $('chart'), ctx = canvas.getContext('2d');
+function drawChart() {
+  const C = pal();
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+    canvas.width = w * dpr; canvas.height = h * dpr;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = C.grid;
+  for (let x = 0; x < w; x += 24)
+    for (let y = 0; y < h; y += 24)
+      ctx.fillRect(x, y, 1, 1);
+
+  const tNow = recording ? now() : tFrozen;   // frozen pre-brew (0) and post-stop
+  /* fixed-width sliding time window: never compresses mid-brew */
+  let winW = 120;
+  if (ghost) {
+    const gEnd = ghost.type === 'recipe'
+      ? (ghost.obj.stages.length ? ghost.obj.stages[ghost.obj.stages.length - 1].t : 0)
+      : ghost.obj.duration;
+    winW = Math.max(120, gEnd + 15);
+  }
+  const tMin = Math.max(0, tNow - winW);
+  const tMax = tMin + winW;
+
+  /* sticky Y scales: only grow, reset on brew start / guide change */
+  let gMaxW = 0;
+  if (ghost) {
+    gMaxW = (ghost.type === 'recipe'
+      ? Math.max(0, ...ghost.obj.stages.map(s => s.g))
+      : Math.max(0, ...ghost.obj.samples.map(s => s.w))) + tolerance;
+  }
+  const dataWMax = Math.max(0, ...wSamples.map(s => s.v));
+  yMaxW = Math.max(50, yMaxW, Math.ceil(Math.max(gMaxW, dataWMax) / 50) * 50);
+  const wMax = yMaxW;
+
+  const padL = 34, padR = 12, padT = 10, padB = 18;
+  const cw = w - padL - padR, ch = h - padT - padB;
+  const X = t => padL + ((t - tMin) / (tMax - tMin)) * cw;
+  const Yw = v => padT + ch - (Math.max(0, v) / wMax) * ch;
+
+  ctx.font = '9px "Space Mono"';
+  ctx.fillStyle = C.axis;
+  ctx.textAlign = 'left';
+  for (let g = 0; g <= wMax; g += 50) ctx.fillText(g, 2, Yw(g) + 3);
+  ctx.textAlign = 'center';
+  const tStep = winW > 180 ? 60 : 30;
+  for (let ts = Math.ceil(tMin / tStep) * tStep; ts <= tMax; ts += tStep)
+    ctx.fillText(fmtTime(ts * 1000).slice(0, 5), X(ts), h - 4);
+
+  ctx.strokeStyle = C.base;
+  ctx.beginPath(); ctx.moveTo(padL, Yw(0)); ctx.lineTo(w - padR, Yw(0)); ctx.stroke();
+
+  /* ghost target + tolerance band */
+  if (ghost) {
+    const gEnd = ghost.type === 'recipe'
+      ? (ghost.obj.stages.length ? ghost.obj.stages[ghost.obj.stages.length - 1].t : 0)
+      : ghost.obj.duration;
+    const color = ghost.type === 'recipe' ? C.target : C.shadowT;
+
+    ctx.setLineDash([4, 5]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = ghost.type === 'recipe' ? C.bandR : C.bandB;
+    for (const off of [tolerance, -tolerance]) {
+      ctx.beginPath();
+      for (let t = 0; t <= gEnd; t += Math.max(0.5, gEnd / 240)) {
+        const y = Yw((targetAt(t) || 0) + off);
+        t === 0 ? ctx.moveTo(X(t), y) : ctx.lineTo(X(t), y);
+      }
+      ctx.stroke();
+    }
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    for (let t = 0; t <= gEnd; t += Math.max(0.5, gEnd / 240)) {
+      const y = Yw(targetAt(t) || 0);
+      t === 0 ? ctx.moveTo(X(t), y) : ctx.lineTo(X(t), y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (ghost.type === 'recipe') {
+      ctx.strokeStyle = C.stage;
+      ctx.fillStyle = C.stageTxt;
+      ctx.textAlign = 'left';
+      let prevLabelX = -1e9;
+      ghost.obj.stages.forEach(s => {
+        const sx = X(s.t);
+        ctx.beginPath();
+        ctx.moveTo(sx, padT); ctx.lineTo(sx, padT + ch);
+        ctx.stroke();
+        const name = s.name.toUpperCase();
+        if (sx - prevLabelX > 72) {          // skip labels that would overlap
+          ctx.fillText(name, sx + 4, padT + 9);
+          prevLabelX = sx;
+        }
+      });
+    }
+  }
+
+  /* weight */
+  if (wSamples.length > 1) {
+    ctx.strokeStyle = C.weight; ctx.lineWidth = 1.5;
+    ctx.shadowColor = C.glow; ctx.shadowBlur = 6;
+    ctx.beginPath();
+    wSamples.forEach((s, i) => i ? ctx.lineTo(X(s.t), Yw(s.v)) : ctx.moveTo(X(s.t), Yw(s.v)));
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    const last = wSamples[wSamples.length - 1];
+    ctx.fillStyle = C.dot;
+    ctx.beginPath(); ctx.arc(X(last.t), Yw(last.v), 3, 0, Math.PI * 2); ctx.fill();
+  }
+  requestAnimationFrame(drawChart);
+}
+requestAnimationFrame(drawChart);
+
+/* ── archive UI ─────────────────────────────────────── */
+async function renderArchive() {
+  const list = $('archive-list');
+  brewsCache = (await allBrews()) || [];
+  if (!brewsCache.length) {
+    list.innerHTML = '<div class="empty">' + T().noBrews + '</div>';
+    return;
+  }
+  list.innerHTML = '';
+  brewsCache.slice().reverse().forEach(b => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML =
+      '<span class="name">' + esc(b.name) + '</span>' +
+      '<span class="meta">' + b.date.slice(0, 10) + ' // ' +
+        (b.dose ? b.dose.toFixed(1) + 'g→' : '') +
+        b.samples[b.samples.length - 1].w.toFixed(1) + 'g' +
+        (b.dose ? ' // 1:' + (b.samples[b.samples.length - 1].w / b.dose).toFixed(1) : '') +
+        ' // ' + Math.round(b.duration) + 's</span>';
+    const btnG = document.createElement('button');
+    btnG.className = 'mini'; btnG.textContent = T().btnShadow;
+    btnG.onclick = () => {
+      rebuildGhostSel();
+      els.ghostSel.value = 'b:' + b.id;
+      applyGhostSel();
+      switchView('brew');
+    };
+    const btnD = document.createElement('button');
+    btnD.className = 'mini'; btnD.textContent = T().btnDel;
+    btnD.onclick = async () => {
+      await delBrew(b.id);
+      if (els.ghostSel.value === 'b:' + b.id) els.ghostSel.value = 'none';
+      renderArchive().then(rebuildGhostSel);
+    };
+    row.appendChild(btnG); row.appendChild(btnD);
+    list.appendChild(row);
+  });
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+/* ── coach editor UI ────────────────────────────────── */
+let editingRecipe = null;
+function stageRow(s = { name: '', t: 60, g: 100 }) {
+  const row = document.createElement('div');
+  row.className = 'stage-row';
+  row.innerHTML =
+    '<input type="text" placeholder="' + T().stageNamePh + '" value="' + esc(s.name) + '" spellcheck="false">' +
+    '<input type="text" class="t" value="' + fmtTime(s.t * 1000).slice(0, 5) + '" spellcheck="false">' +
+    '<input type="number" class="g" value="' + s.g + '" min="0">';
+  const btn = document.createElement('button');
+  btn.className = 'mini'; btn.textContent = '×';
+  btn.onclick = () => row.remove();
+  row.appendChild(btn);
+  return row;
+}
+function parseT(str) {
+  const m = str.trim().match(/^(\d+):([0-5]?\d)$/);
+  if (m) return +m[1] * 60 + +m[2];
+  return Math.max(0, parseInt(str, 10) || 0);
+}
+function loadEditor(r) {
+  editingRecipe = r;
+  $('r-name').value = r ? r.name : '';
+  const box = $('stages');
+  box.innerHTML = '';
+  (r ? r.stages : T().defStages.map(s => ({ ...s })))
+    .forEach(s => box.appendChild(stageRow(s)));
+}
+async function renderRecipes() {
+  const list = $('recipe-list');
+  recipesCache = (await allRecipes()) || [];
+  if (!recipesCache.length) {
+    list.innerHTML = '<div class="empty">' + T().noRecipes + '</div>';
+    return;
+  }
+  list.innerHTML = '';
+  const curGuide = els.ghostSel.value;
+  recipesCache.forEach(r => {
+    const active = curGuide === 'r:' + r.id;
+    const row = document.createElement('div');
+    row.className = 'row' + (active ? ' active' : '');
+    const total = r.stages.length ? r.stages[r.stages.length - 1].g : 0;
+    const dur = r.stages.length ? r.stages[r.stages.length - 1].t : 0;
+    row.innerHTML =
+      '<span class="name">' + (active ? '▸ ' : '') + esc(r.name) + '</span>' +
+      '<span class="meta">' + r.stages.length + ' ' + T().stagesUnit + ' // ' + total + 'g // ' + fmtTime(dur * 1000).slice(0, 5) + '</span>';
+
+    const mk = (label, fn, primary) => {
+      const b = document.createElement('button');
+      b.className = 'mini' + (primary ? ' primary' : '');
+      b.textContent = label;
+      b.onclick = fn;
+      row.appendChild(b);
+    };
+    mk(T().btnTarget, () => {
+      rebuildGhostSel();
+      els.ghostSel.value = 'r:' + r.id;
+      applyGhostSel();
+      switchView('brew');
+    }, active);
+    mk(T().btnEdit, () => loadEditor(r));
+    mk(T().btnDup, async () => {
+      await putRecipe({ name: r.name + T().copySuffix, stages: JSON.parse(JSON.stringify(r.stages)) });
+      renderRecipes().then(rebuildGhostSel);
+    });
+    mk(T().btnDel, async () => {
+      await delRecipe(r.id);
+      if (editingRecipe && editingRecipe.id === r.id) loadEditor(null);
+      if (els.ghostSel.value === 'r:' + r.id) els.ghostSel.value = 'none';
+      renderRecipes().then(rebuildGhostSel);
+    });
+    list.appendChild(row);
+  });
+}
+
+/* ── recipe import / export ─────────────────────────── */
+$('r-export').onclick = () => {
+  const data = JSON.stringify({ format: 'ghostbrew-recipes', recipes: recipesCache }, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = 'ghost-brew-recipes.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  foot(T().exported + ' // ' + recipesCache.length + ' ' + T().recipesUnit);
+};
+$('r-import').onclick = () => $('r-file').click();
+$('r-file').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    const list = Array.isArray(data) ? data : data.recipes;
+    if (!Array.isArray(list)) throw new Error('bad format');
+    let n = 0;
+    for (const r of list) {
+      if (!r || typeof r.name !== 'string' || !Array.isArray(r.stages)) continue;
+      const stages = r.stages
+        .filter(s => s && isFinite(+s.t) && isFinite(+s.g))
+        .map(s => ({ name: String(s.name || 'STAGE'), t: +s.t, g: +s.g }))
+        .sort((a, b) => a.t - b.t);
+      if (!stages.length) continue;
+      await putRecipe({ name: r.name, stages });
+      n++;
+    }
+    await renderRecipes();
+    rebuildGhostSel();
+    foot(T().imported + ' // ' + n + ' ' + T().recipesUnit);
+  } catch (err) {
+    foot(T().importErr + ' // ' + err.message);
+  }
+};
+$('r-add').onclick = () => $('stages').appendChild(stageRow());
+$('r-add-hold').onclick = () => {
+  const rows = $('stages').children;
+  let t = 30, g = 50;
+  if (rows.length) {
+    const ins = rows[rows.length - 1].querySelectorAll('input');
+    t = parseT(ins[1].value) + 15;
+    g = +ins[2].value || 0;
+  }
+  $('stages').appendChild(stageRow({ name: T().holdName, t, g }));
+};
+$('r-new').onclick = () => loadEditor(null);
+$('r-del').onclick = async () => {
+  if (!editingRecipe || !editingRecipe.id) return;
+  await delRecipe(editingRecipe.id);
+  loadEditor(null);
+  renderRecipes().then(rebuildGhostSel);
+};
+$('r-save').onclick = async () => {
+  const stages = [...$('stages').children].map(row => {
+    const ins = row.querySelectorAll('input');
+    return { name: ins[0].value.trim() || 'STAGE', t: parseT(ins[1].value), g: Math.max(0, +ins[2].value || 0) };
+  }).sort((a, b) => a.t - b.t);
+  if (!stages.length) return;
+  const r = { name: $('r-name').value.trim() || 'UNTITLED', stages };
+  if (editingRecipe && editingRecipe.id) r.id = editingRecipe.id;  // no id key → autoIncrement generates one
+  const id = await putRecipe(r);
+  r.id = r.id || id;
+  editingRecipe = r;
+  renderRecipes().then(rebuildGhostSel);
+  foot(T().recipeSaved + ' // ' + r.name);
+};
+
+/* ── recipe quick import (text → stages) ────────────── */
+function parseRecipeText(text) {
+  const lines = text.split(/[\n;；]+/).map(s => s.trim()).filter(Boolean);
+  const stages = [];
+  let prevT = 15;
+  for (const line of lines) {
+    let rest = ' ' + line + ' ';
+    let t = null;
+    const tm = rest.match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/);
+    if (tm) { t = +tm[1] * 60 + +tm[2]; rest = rest.replace(tm[0], ' '); }
+    else {
+      const ts = rest.match(/(\d+)\s*(?:s|S|秒)/);
+      if (ts) { t = +ts[1]; rest = rest.replace(ts[0], ' '); }
+    }
+    const gm = rest.match(/(\d+(?:\.\d+)?)\s*(?:g|G|克)/) || rest.match(/(\d+(?:\.\d+)?)/);
+    if (!gm) continue;
+    const g = parseFloat(gm[1]);
+    rest = rest.replace(gm[0], ' ');
+    if (t === null) t = prevT + 30;      // no time given: 30s after previous stage
+    prevT = t;
+    const name = rest
+      .replace(/[，,、\/|=＝—→>*:：]+/g, ' ')
+      .replace(/注水到|注水|注水至|加水到|加水|到|至/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    stages.push({ name: name || 'STAGE', t, g });
+  }
+  return stages.sort((a, b) => a.t - b.t);
+}
+$('qi-parse').onclick = async () => {
+  const stages = parseRecipeText($('qi-text').value);
+  const prev = $('qi-preview');
+  if (!stages.length) {
+    prev.textContent = T().qiNone;
+    return;
+  }
+  const name = $('qi-name').value.trim() ||
+    'IMPORTED ' + new Date().toISOString().slice(5, 10);
+  await putRecipe({ name, stages });
+  await renderRecipes();
+  rebuildGhostSel();
+  prev.textContent = T().qiSaved + ' // ' + name + '\n' + stages.map(s =>
+    fmtTime(s.t * 1000).slice(0, 5) + '  →  ' + String(s.g).padStart(3, ' ') + 'g   ' + s.name
+  ).join('\n');
+  foot(T().parsed + ' // ' + stages.length + ' ' + T().stagesTail);
+};
+
+/* ── modal ──────────────────────────────────────────── */
+$('m-save').onclick = async () => {
+  const name = $('brew-name').value.trim() || 'UNTITLED';
+  const samples = recSamples;
+  await putBrew({
+    name, date: new Date().toISOString(),
+    duration: samples[samples.length - 1].t,
+    dose: doseWeight || null,
+    samples,
+  });
+  recSamples = [];
+  $('modal').classList.add('hidden');
+  renderArchive().then(rebuildGhostSel);
+  foot(T().archived + ' // ' + name);
+};
+$('m-discard').onclick = () => {
+  recSamples = [];
+  $('modal').classList.add('hidden');
+};
+
+/* ── nav / views ────────────────────────────────────── */
+function switchView(name) {
+  document.querySelectorAll('nav button').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === name));
+  ['brew', 'archive', 'coach'].forEach(v =>
+    $('view-' + v).classList.toggle('hidden', v !== name));
+}
+document.querySelectorAll('nav button').forEach(b =>
+  b.onclick = () => switchView(b.dataset.view));
+
+/* ── dose mode (称豆 → 冲煮 → 水粉比) ───────────────── */
+els.btnDose.onclick = () => {
+  if (appMode === 'dose') {
+    if (lastWeight <= 0) { foot(T().doseErr); return; }
+    doseWeight = lastWeight; doseAuto = false;   // manual lock wins over sniffing
+    appMode = 'brew';
+    els.dose.textContent = doseWeight.toFixed(1);
+    els.ratio.textContent = '1:0.0';
+    els.btnDose.textContent = T().reDose;
+    foot(T().doseSet(doseWeight.toFixed(1)));
+    beep(660);
+  } else {
+    appMode = 'dose';
+    els.ratio.textContent = '--';
+    els.btnDose.textContent = T().setDose;
+  }
+};
+
+/* ── language / theme ───────────────────────────────── */
+function applyLang() {
+  const t = T();
+  document.documentElement.lang = lang;
+  document.querySelector('[data-view=brew]').textContent = t.navBrew;
+  document.querySelector('[data-view=archive]').textContent = t.navArchive;
+  document.querySelector('[data-view=coach]').textContent = t.navCoach;
+  els.btnLang.textContent = lang === 'zh' ? 'EN' : '中文';
+  $('lbl-time').textContent = t.time;
+  $('lbl-weight').textContent = t.weightL;
+  $('lbl-flow').textContent = t.flowL;
+  $('lbl-dose').textContent = t.doseL;
+  $('lbl-ratio').textContent = t.ratioL;
+  els.btnDose.textContent = appMode === 'dose' ? t.setDose : t.reDose;
+  els.connect.textContent = device ? t.disconnect : (DEMO ? 'DEMO' : t.connect);
+  els.tare.textContent = t.tare;
+  els.start.textContent = t.start;
+  els.stop.textContent = t.stop;
+  els.reset.textContent = t.reset;
+  $('guide-label').textContent = t.guide;
+  $('tol-label').textContent = t.tol;
+  els.sound.textContent = soundOn ? t.soundOn : t.soundOff;
+  $('chart-title').textContent = t.chartTitle;
+  $('leg-w').textContent = t.legW;
+  $('leg-t').textContent = t.legT;
+  $('leg-s').textContent = t.legS;
+  $('coach-label').textContent = t.recipes;
+  $('r-import').textContent = t.importB;
+  $('r-export').textContent = t.exportB;
+  $('editor-label').textContent = t.editor;
+  $('r-name').placeholder = t.namePh;
+  $('sh-name').textContent = t.shName;
+  $('sh-time').textContent = t.shTime;
+  $('sh-g').textContent = t.shG;
+  $('r-add').textContent = t.addStage;
+  $('r-add-hold').textContent = t.addHold;
+  $('r-save').textContent = t.saveRecipe;
+  $('r-new').textContent = t.newR;
+  $('r-del').textContent = t.delR;
+  $('editor-help').textContent = t.editorHelp;
+  $('qi-label').textContent = t.qiLabel;
+  $('qi-text').placeholder = t.qiPh;
+  $('qi-name').placeholder = t.namePh;
+  $('qi-parse').textContent = t.qiParse;
+  $('modal-label').textContent = t.saveBrew;
+  $('m-save').textContent = t.saveB;
+  $('m-discard').textContent = t.discardB;
+  if (!recording) els.stageLine.textContent = ghost ? t.armed : '';
+  if (!device && !DEMO && navigator.bluetooth) foot(t.waiting);
+  renderArchive().then(rebuildGhostSel);
+  renderRecipes();
+}
+els.btnLang.onclick = () => {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  kvSet('lang', lang);
+  applyLang();
+};
+function applyTheme(th) {
+  document.body.classList.toggle('light', th === 'light');
+  els.btnTheme.textContent = th === 'light' ? 'DARK' : 'LIGHT';
+  kvSet('theme', th);
+}
+els.btnTheme.onclick = () =>
+  applyTheme(document.body.classList.contains('light') ? 'dark' : 'light');
+
+/* ── wire-up ────────────────────────────────────────── */
+els.connect.onclick = () => {
+  if (device) { manualDisc = true; device.gatt.disconnect(); }
+  else connect();
+};
+els.tare.onclick = () => send(CMD.TARE);
+els.reset.onclick = async () => {
+  /* FW ignores RESET while the timer runs → STOP first; also reset the app side */
+  if (recording) stopRecording(false);
+  await send(CMD.STOP);
+  await send(CMD.RESET);
+  wSamples.length = 0; fSamples.length = 0;
+  recSamples = []; stageIdx = 0;
+  yMaxW = 50; yMaxF = 8; flowSm = 0; lastFlow = 0; scaleTimer = false;
+  autoDose = 0; doseWeight = 0; doseAuto = false;
+  appMode = 'dose';
+  els.dose.textContent = '--';
+  els.ratio.textContent = '--';
+  els.btnDose.textContent = T().setDose;
+  tFrozen = 0;
+  els.timer.textContent = '00:00';
+  els.flow.textContent = '0.0';
+  els.weight.classList.remove('warn');
+  els.stageLine.textContent = ghost ? T().armed : '';
+  els.deltaWrap.classList.add('hidden');
+  foot(T().resetDone);
+};
+els.start.onclick = () => { send(CMD.START); startRecording(); };
+els.stop.onclick = () => { send(CMD.STOP); stopRecording(true); };
+
+if (!navigator.bluetooth) {
+  els.connect.disabled = true;
+}
+
+/* ── init ───────────────────────────────────────────── */
+window.addEventListener('error', e => {
+  foot('JS ERR // ' + e.message);
+});
+window.addEventListener('unhandledrejection', e => {
+  foot('DB ERR // ' + (e.reason && e.reason.message || e.reason));
+});
+(async () => {
+  try {
+    await openDB();
+    lang = (await kvGet('lang')) || 'zh';
+    applyTheme((await kvGet('theme')) || 'dark');
+    tolerance = (await kvGet('tol')) || 5;
+    soundOn = !!(await kvGet('sound'));
+    els.tol.value = tolerance;
+    if (soundOn) els.sound.classList.add('toggled');
+
+    recipesCache = (await allRecipes()) || [];
+    if (!recipesCache.length) {
+      await putRecipe({
+        name: 'CLASSIC 1:15',
+        stages: [
+          { name: '闷蒸注水', t: 45, g: 50 },
+          { name: '闷蒸等待', t: 60, g: 50 },
+          { name: '第一段注水', t: 75, g: 120 },
+          { name: '等待下水', t: 90, g: 120 },
+          { name: '第二段注水', t: 110, g: 185 },
+          { name: '等待下水', t: 125, g: 185 },
+          { name: '第三段注水', t: 145, g: 240 },
+          { name: '滴滤', t: 200, g: 240 },
+        ],
+      });
+    } else {
+      /* one-time migration: replace old hold-less default recipe */
+      const classic = recipesCache.find(r => r.name === 'CLASSIC 1:15' && r.stages.length === 5);
+      if (classic) {
+        classic.stages = [
+          { name: '闷蒸注水', t: 45, g: 50 },
+          { name: '闷蒸等待', t: 60, g: 50 },
+          { name: '第一段注水', t: 75, g: 120 },
+          { name: '等待下水', t: 90, g: 120 },
+          { name: '第二段注水', t: 110, g: 185 },
+          { name: '等待下水', t: 125, g: 185 },
+          { name: '第三段注水', t: 145, g: 240 },
+          { name: '滴滤', t: 200, g: 240 },
+        ];
+        await putRecipe(classic);
+      }
+    }
+    /* built-in preset: OREA fast-flow pulse recipe */
+    if (!recipesCache.some(r => r.name === 'OREA')) {
+      await putRecipe({
+        name: 'OREA',
+        stages: [
+          { name: '闷蒸注水', t: 6, g: 30 },
+          { name: '闷蒸等待', t: 24, g: 30 },
+          { name: '第一段注水', t: 30, g: 120 },
+          { name: '等待下水', t: 60, g: 120 },
+          { name: '第二段注水', t: 60, g: 200 },
+          { name: '等待下水', t: 70, g: 200 },
+          { name: '滴滤', t: 150, g: 200 },
+        ],
+      });
+    }
+    loadEditor(null);
+    applyLang();
+    await renderRecipes();
+    await renderArchive();
+    rebuildGhostSel();
+    const savedGuide = await kvGet('guide');
+    if (savedGuide) {
+      els.ghostSel.value = savedGuide;
+      if (els.ghostSel.value !== savedGuide) els.ghostSel.value = 'none';
+      applyGhostSel();
+      renderRecipes();          // refresh ▸ highlight on restored guide
+    }
+    if (!navigator.bluetooth) foot(T().noBt);
+    autoConnect();              // silently re-pair a previously permitted scale
+  } catch (err) {
+    foot('INIT ERR // ' + err.message);
+  }
+})();
+
+/* ── demo mode (?demo): simulated scale ─────────────── */
+if (DEMO) {
+  const pts = [[0,0],[45,50],[60,50],[75,120],[90,120],[110,185],[125,185],[145,240],[200,240]];
+  const profile = t => {
+    if (t >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (t <= pts[i + 1][0]) {
+        const k = (t - pts[i][0]) / (pts[i + 1][0] - pts[i][0] || 1);
+        return pts[i][1] + k * (pts[i + 1][1] - pts[i][1]);
+      }
+    }
+    return 0;
+  };
+  const simMsg = (head, i32, u32) => {
+    const b = new Uint8Array(10), dv = new DataView(b.buffer);
+    b[0] = head; dv.setInt32(1, Math.round(i32), true);
+    dv.setUint32(5, Math.max(0, Math.round(u32)), true);
+    let x = 0; for (let i = 1; i < 9; i++) x ^= b[i]; b[9] = x;
+    return { target: { value: { buffer: b.buffer } } };
+  };
+  els.connect.textContent = 'Demo';
+  els.connect.onclick = () => {};
+  els.connLed.classList.add('on');
+  els.connText.textContent = 'ECLAIR-DEMO';
+  [els.tare, els.start, els.stop, els.reset].forEach(b => b.disabled = false);
+  foot('DEMO MODE // SIMULATED SCALE');
+
+  let lastSimW = 0;
+  setInterval(() => {
+    const t = recording ? now() : 0;
+    const w = recording ? profile(t) + Math.sin(t * 9) * 0.25 + (Math.random() - .5) * 0.3 : 0;
+    lastSimW = w;
+    onData(simMsg(0x57, w * 1000, recording ? t * 1000 : 0));
+  }, 100);
+  let prevW = 0, prevT = 0;
+  setInterval(() => {
+    const t = recording ? now() : 0;
+    const dt = t - prevT;
+    const f = dt > 0 ? Math.max(0, (lastSimW - prevW) / dt) : 0;
+    prevW = lastSimW; prevT = t;
+    onData(simMsg(0x46, f * 1000, recording ? t * 1000 : 0));
+  }, 170);
+  setInterval(() => onData(simMsg(0x42, 87, 0)), 3000);
+
+  /* auto-pick first recipe and auto-start the brew */
+  setTimeout(() => {
+    const opt = els.ghostSel.querySelector('option[value^="r:"]');
+    if (opt) { els.ghostSel.value = opt.value; applyGhostSel(); }
+    setTimeout(startRecording, 500);
+  }, 1200);
+}
+</script>
+</body>
+</html>
