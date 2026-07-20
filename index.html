@@ -469,6 +469,7 @@ const I18N = {
     autoConn: 'AUTO-CONNECTING', autoConnFail: 'AUTO-CONNECT FAILED // USE CONNECT BUTTON',
     err: 'ERR', noBt: 'ERR // WEB BLUETOOTH NOT SUPPORTED — USE CHROME/EDGE ON DESKTOP, OR BLUEFY ON IPHONE/IPAD. TRY ?DEMO',
     kettle: 'KETTLE', ketLow: 'KETTLE BELOW TARGET', speakKetLow: c => 'Water at ' + c + ' degrees, below target.',
+    noAutoBt: 'AUTO-CONNECT UNSUPPORTED IN THIS BROWSER — TAP CONNECT EACH TIME', noPaired: 'NO PERMITTED SCALE FOUND — TAP CONNECT TO PAIR',
     doseErr: 'DOSE ERR // PUT BEANS ON SCALE FIRST',
     autoDose: g => 'AUTO-DOSE // ' + g + 'g STABLE — WILL ADOPT AT BREW START',
     doseSet: g => 'DOSE SET // ' + g + 'g — TARE & START',
@@ -519,6 +520,7 @@ const I18N = {
     autoConn: '正在自动连接', autoConnFail: '自动连接失败 // 请手动点连接',
     err: '错误', noBt: '错误 // 此浏览器不支持网页蓝牙 —— 电脑请用 CHROME/EDGE,IPHONE/IPAD 请用 BLUEFY 浏览器;也可加 ?DEMO 体验',
     kettle: '水壶', ketLow: '水温未达目标', speakKetLow: c => '水温 ' + c + ' 度,还没到目标温度',
+    noAutoBt: '此浏览器不支持自动重连 —— 每次请手动点「连接」', noPaired: '没有找到已授权的秤 —— 请点「连接」配对',
     doseErr: '错误 // 请先放上豆子',
     autoDose: g => '粉量自动识别 // ' + g + '克（稳定重量）— 冲煮时自动采用',
     doseSet: g => '粉量已锁定 // ' + g + '克 — 去皮后开始',
@@ -793,11 +795,15 @@ async function connect() {
 }
 /* silently reconnect to a previously-permitted scale — no picker */
 async function autoConnect() {
-  if (DEMO || !navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+  if (DEMO || !navigator.bluetooth) return;
+  /* Bluefy (iOS) and older Chromium lack the permission-backend API —
+     auto-reconnect is impossible there, say so instead of failing silently */
+  if (!navigator.bluetooth.getDevices) { foot(T().noAutoBt); return; }
   try {
     const devs = await navigator.bluetooth.getDevices();
     const d = devs.find(x => x.name && x.name.startsWith('ECLAIR-'));
-    if (!d || device) return;
+    if (!d) { if (!device) foot(T().noPaired); return; }
+    if (device) return;
     foot(T().autoConn + ' // ' + d.name);
     await attachDevice(d);
   } catch (err) {
