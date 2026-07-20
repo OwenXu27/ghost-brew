@@ -286,6 +286,7 @@
       <button id="btn-lang" class="mini">EN</button>
       <button id="btn-theme" class="mini">LIGHT</button>
       <div class="status-item"><span id="bat">BAT ---%</span></div>
+      <div class="status-item hidden" id="ket-item"><div id="ket-led" class="led"></div><span id="ket-text">--°</span></div>
       <div class="status-item"><div id="conn-led" class="led"></div><span id="conn-text">OFFLINE</span></div>
       <div class="status-item"><div id="rec-led" class="led"></div><span>REC</span></div>
     </div>
@@ -324,12 +325,19 @@
       </div>
       <div class="sub-row">
         <div id="delta-wrap" class="hidden"><span class="label">Δ&nbsp;</span><span id="delta" class="val">--</span></div>
+        <div id="ket-controls" class="hidden">
+          <button class="mini" id="ket-minus">−</button>
+          <span id="ket-target" class="val">--°</span>
+          <button class="mini" id="ket-plus">+</button>
+          <button class="mini" id="ket-power">PWR</button>
+        </div>
       </div>
       <div id="stage-line"></div>
     </div>
 
     <div class="controls">
       <button id="btn-connect" class="primary">Connect</button>
+      <button id="btn-kettle">Kettle</button>
       <button id="btn-dose">Set Dose ▸</button>
       <button id="btn-tare" disabled>Tare</button>
       <button id="btn-start" disabled>Start</button>
@@ -460,6 +468,7 @@ const I18N = {
     connected: 'CONNECTED', disconnected: 'DISCONNECTED',
     autoConn: 'AUTO-CONNECTING', autoConnFail: 'AUTO-CONNECT FAILED // USE CONNECT BUTTON',
     err: 'ERR', noBt: 'ERR // WEB BLUETOOTH NOT SUPPORTED — USE CHROME/EDGE ON DESKTOP, OR BLUEFY ON IPHONE/IPAD. TRY ?DEMO',
+    kettle: 'KETTLE', ketLow: 'KETTLE BELOW TARGET', speakKetLow: c => 'Water at ' + c + ' degrees, below target.',
     doseErr: 'DOSE ERR // PUT BEANS ON SCALE FIRST',
     autoDose: g => 'AUTO-DOSE // ' + g + 'g STABLE — WILL ADOPT AT BREW START',
     doseSet: g => 'DOSE SET // ' + g + 'g — TARE & START',
@@ -509,6 +518,7 @@ const I18N = {
     connected: '已连接', disconnected: '已断开',
     autoConn: '正在自动连接', autoConnFail: '自动连接失败 // 请手动点连接',
     err: '错误', noBt: '错误 // 此浏览器不支持网页蓝牙 —— 电脑请用 CHROME/EDGE,IPHONE/IPAD 请用 BLUEFY 浏览器;也可加 ?DEMO 体验',
+    kettle: '水壶', ketLow: '水温未达目标', speakKetLow: c => '水温 ' + c + ' 度,还没到目标温度',
     doseErr: '错误 // 请先放上豆子',
     autoDose: g => '粉量自动识别 // ' + g + '克（稳定重量）— 冲煮时自动采用',
     doseSet: g => '粉量已锁定 // ' + g + '克 — 去皮后开始',
@@ -535,6 +545,14 @@ const SERVICE_UUID = 'b905eaea-2e63-0e04-7582-7913f10d8f81';
 const CHAR_CONFIG  = '4f9a45ba-8e1b-4e07-e157-0814d393b968';
 const CHAR_DATA    = 'ad736c5f-bbc9-1f96-d304-cb5d5f41e160';
 const CMD = { TARE: 0x54, RESET: 0x52, START: 0x53, STOP: 0x45 };
+
+/* ── Fellow Stagg EKG+ kettle (serial-over-BLE, community-reversed) ── */
+const KET_SERVICE = '00001820-0000-1000-8000-00805f9b34fb';
+const KET_CHAR    = '00002a80-0000-1000-8000-00805f9b34fb';
+/* magic handshake — without it the kettle never reports state */
+const KET_INIT = new Uint8Array([0xef, 0xdd, 0x0b, 0x30, 0x31, 0x32, 0x33,
+  0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x9a, 0x6d]);
+const KET_FRAME_LEN = [3, 3, 4, 4, 4, 4, 3, 3, 3];   // state type → frame length
 
 function buildMsg(header, payload) {
   const buf = new Uint8Array(2 + payload.length);
@@ -568,6 +586,9 @@ let appMode = 'dose', doseWeight = 0, doseAuto = false;
 let stabRef = 0, stabSince = 0;      // running stability tracker (idle only)
 let autoDose = 0, autoDoseAt = 0;    // last stable plateau in bean range
 let stageIdx = 0, stageStartT = 0, audioCtx = null;
+let kettle = null, ketChar = null, ketManualDisc = false;
+let ketTemp = null, ketTarget = null, ketPower = false, ketLifted = false, ketUnits = 'C';
+let ketSeq = 0, ketBufState = 0, ketBuf = [], ketQ = Promise.resolve();
 
 const $ = id => document.getElementById(id);
 const els = {
@@ -799,6 +820,98 @@ async function send(header) {
   if (configChar) await configChar.writeValue(buildMsg(header, [0x01]));
 }
 
+/* ── EKG+ kettle: connection, frame parser, commands ── */
+async function attachKettle(d) {
+  kettle = d; ketManualDisc = false; ketSeq = 0; ketBufState = 0; ketBuf = [];
+  d.addEventListener('gattserverdisconnected', onKetDisconnect);
+  const server = await d.gatt.connect();
+  const svc = await server.getPrimaryService(KET_SERVICE);
+  ketChar = await svc.getCharacteristic(KET_CHAR);
+  await ketChar.startNotifications();
+  ketChar.addEventListener('characteristicvaluechanged', onKetData);
+  await ketChar.writeValue(KET_INIT);
+  kvSet('ketId', d.id);
+  foot(T().connected + ' // ' + (d.name || 'KETTLE'));
+  $('btn-kettle').textContent = T().disconnect;
+  renderKettle();
+}
+async function connectKettle() {
+  try {
+    const d = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [KET_SERVICE] }],
+    });
+    await attachKettle(d);
+  } catch (err) {
+    foot(T().err + ' // ' + err.message);
+  }
+}
+async function autoConnectKettle() {
+  if (DEMO || !navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+  try {
+    const kid = await kvGet('ketId');
+    if (!kid || kettle) return;
+    const d = (await navigator.bluetooth.getDevices()).find(x => x.id === kid);
+    if (d) await attachKettle(d);
+  } catch (e) { /* kettle off-base or out of range — stay quiet */ }
+}
+function onKetDisconnect() {
+  kettle = null; ketChar = null;
+  $('btn-kettle').textContent = T().kettle;
+  renderKettle();
+  if (!ketManualDisc) setTimeout(() => { if (!kettle && !ketManualDisc) autoConnectKettle(); }, 2500);
+}
+/* stream frames: 0xef 0xdd + type byte + payload (length by type) */
+function onKetData(e) {
+  const p = new Uint8Array(e.target.value.buffer);
+  for (let i = 0; i < p.length; i++) {
+    if (ketBufState === 0 && p[i] === 0xef) { ketBufState = 1; ketBuf = []; continue; }
+    if (ketBufState === 1 && p[i] === 0xdd) { ketBufState = 2; ketBuf = []; continue; }
+    if (ketBufState === 2) {
+      ketBuf.push(p[i]);
+      if (ketBuf.length > 1 && ketBuf[0] < KET_FRAME_LEN.length &&
+          ketBuf.length >= KET_FRAME_LEN[ketBuf[0]]) {
+        ketParse(ketBuf); ketBuf = []; ketBufState = 1;
+      } else if (ketBuf.length > 64) { ketBufState = 0; ketBuf = []; }
+    }
+  }
+}
+function ketParse(f) {
+  const isF = f[2] === 1;
+  const toC = v => isF ? (v - 32) * 5 / 9 : v;
+  switch (f[0]) {
+    case 0: ketPower = f[1] === 1; break;                          // power on/off
+    case 2: ketTarget = Math.round(toC(f[1])); ketUnits = isF ? 'F' : 'C'; break;
+    case 3: ketTemp = toC(f[1]); ketUnits = isF ? 'F' : 'C'; break;
+    case 8: ketLifted = f[1] === 0; break;                         // off the base
+  }
+  renderKettle();
+}
+/* commands: ef dd 0a <seq> <0=power|1=temp> <value> <seq+value> <type>, ≥200ms apart */
+function ketCmd(type, value) {
+  ketQ = ketQ.then(async () => {
+    if (!ketChar) return;
+    const buf = new Uint8Array([0xef, 0xdd, 0x0a, ketSeq, type, value, (ketSeq + value) & 0xff, type]);
+    ketSeq = (ketSeq + 1) & 0xff;
+    try { await ketChar.writeValue(buf); } catch (e) { /* dropped cmd is harmless */ }
+    await new Promise(r => setTimeout(r, 210));
+  });
+}
+function ketSetTemp(c) {
+  c = Math.min(100, Math.max(57, Math.round(c)));   // official 57–100°C range
+  ketCmd(1, ketUnits === 'F' ? Math.round(c * 9 / 5 + 32) : c);
+}
+function renderKettle() {
+  const on = !!kettle;
+  $('ket-item').classList.toggle('hidden', !on && ketTemp === null);
+  $('ket-led').classList.toggle('on', on);
+  if (ketTemp !== null) {
+    $('ket-text').textContent = Math.round(ketTemp) + '°→' + (ketTarget ?? '--') + '°';
+    $('ket-text').classList.toggle('red', ketLifted);
+  }
+  $('ket-controls').classList.toggle('hidden', !on);
+  $('ket-target').textContent = (ketTarget ?? '--') + '°';
+}
+
 /* ── data parsing ───────────────────────────────────── */
 function fmtTime(ms) {
   const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), d = Math.floor((ms % 1000) / 100);
@@ -990,6 +1103,12 @@ function startRecording() {
   els.start.disabled = true;
   els.deltaWrap.classList.toggle('hidden', !ghost);
   els.stageLine.textContent = '';
+  /* kettle linkage: warn when the water hasn't reached the target temp
+     (stage-0 cue below cancels this utterance when a ghost is active) */
+  if (kettle && ketTemp !== null && ketTarget !== null && ketTemp < ketTarget - 1.5) {
+    foot(T().ketLow + ' // ' + Math.round(ketTemp) + '°→' + ketTarget + '°');
+    speak(T().speakKetLow(Math.round(ketTemp)));
+  }
   if (ghost && ghost.type === 'recipe' && ghost.obj.stages.length)
     speak(lang === 'zh' ? ghost.obj.stages[0].name : T().speakPourTo(activeStages()[0].g));
   beep(880);
@@ -1573,6 +1692,7 @@ function applyLang() {
   $('m-save').textContent = t.saveB;
   $('m-discard').textContent = t.discardB;
   if (!recording) els.stageLine.textContent = ghost ? t.armed : '';
+  $('btn-kettle').textContent = kettle ? t.disconnect : t.kettle;
   if (!device && !DEMO && navigator.bluetooth) foot(t.waiting);
   renderArchive().then(rebuildGhostSel);
   renderRecipes();
@@ -1595,6 +1715,14 @@ els.connect.onclick = () => {
   if (device) { manualDisc = true; device.gatt.disconnect(); }
   else connect();
 };
+els.btnKettle = $('btn-kettle');
+els.btnKettle.onclick = () => {
+  if (kettle) { ketManualDisc = true; kettle.gatt.disconnect(); }
+  else connectKettle();
+};
+$('ket-minus').onclick = () => ketSetTemp((ketTarget ?? 94) - 1);
+$('ket-plus').onclick = () => ketSetTemp((ketTarget ?? 94) + 1);
+$('ket-power').onclick = () => ketCmd(0, ketPower ? 0 : 1);
 els.tare.onclick = () => send(CMD.TARE);
 els.reset.onclick = async () => {
   /* FW ignores RESET while the timer runs → STOP first; also reset the app side */
@@ -1622,8 +1750,10 @@ els.stop.onclick = () => { send(CMD.STOP); stopRecording(true); };
 
 if (!navigator.bluetooth) {
   foot(T().noBt);
-  /* keep the button tappable so the hint re-shows instead of silently dead */
-  els.connect.onclick = e => { e.stopImmediatePropagation(); foot(T().noBt); };
+  /* keep the buttons tappable so the hint re-shows instead of silently dead */
+  const dead = e => { e.stopImmediatePropagation(); foot(T().noBt); };
+  els.connect.onclick = dead;
+  $('btn-kettle').onclick = dead;
 }
 
 /* ── init ───────────────────────────────────────────── */
@@ -1765,6 +1895,7 @@ window.addEventListener('unhandledrejection', e => {
     }
     if (!navigator.bluetooth) foot(T().noBt);
     autoConnect();              // silently re-pair a previously permitted scale
+    autoConnectKettle();        // …and a previously paired EKG+ kettle
   } catch (err) {
     foot('INIT ERR // ' + err.message);
   }
