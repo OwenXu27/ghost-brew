@@ -473,6 +473,7 @@ const I18N = {
     doseErr: 'DOSE ERR // PUT BEANS ON SCALE FIRST',
     autoDose: g => 'AUTO-DOSE // ' + g + 'g STABLE — WILL ADOPT AT BREW START',
     doseSet: g => 'DOSE SET // ' + g + 'g — TARE & START',
+    doseAdopt: g => 'DOSE ADOPTED // ' + g + 'g — BREWING',
     recipeSaved: 'RECIPE SAVED', archived: 'ARCHIVED', parsed: 'PARSED',
     exported: 'EXPORTED', imported: 'IMPORTED', importErr: 'IMPORT ERR',
     recipesUnit: 'RECIPES', stagesTail: 'STAGES', resetDone: 'RESET DONE',
@@ -524,6 +525,7 @@ const I18N = {
     doseErr: '错误 // 请先放上豆子',
     autoDose: g => '粉量自动识别 // ' + g + '克（稳定重量）— 冲煮时自动采用',
     doseSet: g => '粉量已锁定 // ' + g + '克 — 去皮后开始',
+    doseAdopt: g => '已采用粉量 // ' + g + '克 — 开始冲煮',
     recipeSaved: '配方已保存', archived: '已存档', parsed: '解析完成',
     exported: '已导出', imported: '已导入', importErr: '导入失败',
     recipesUnit: '个配方', stagesTail: '个阶段', resetDone: '已重置',
@@ -1100,6 +1102,7 @@ function startRecording() {
     els.dose.textContent = doseWeight.toFixed(1);
     els.ratio.textContent = '1:0.0';
     els.btnDose.textContent = T().reDose;
+    foot(T().doseAdopt(doseWeight.toFixed(1)));
   }
   wSamples.length = 0; fSamples.length = 0;
   recSamples = []; stageIdx = 0; stageStartT = 0;
@@ -1122,6 +1125,10 @@ function startRecording() {
 function stopRecording(askSave = true) {
   tFrozen = now();                  // freeze chart at brew end for review
   recording = false;
+  /* back to dose-idle: without this appMode stayed 'brew' after any brew,
+     and the sniffed-dose display (gated on 'dose') froze at the old value */
+  appMode = 'dose';
+  els.btnDose.textContent = T().setDose;
   els.recLed.classList.remove('rec');
   els.start.disabled = !(device || DEMO);
   els.weight.classList.remove('warn');
