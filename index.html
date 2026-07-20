@@ -193,6 +193,7 @@
   }
   .row.active .name { color: var(--red); }
   .row .name { flex: 1; font-weight: 700; letter-spacing: .15em; }
+  .row .desc { display: block; font-weight: 400; color: var(--dim); font-size: 10px; letter-spacing: .05em; margin-top: 5px; white-space: normal; }
   .row .meta { color: var(--dim); font-size: 10px; letter-spacing: .15em; white-space: nowrap; }
   .empty { padding: 60px 0; text-align: center; color: var(--dim); font-size: 11px; letter-spacing: .3em; }
   .panel-head {
@@ -378,6 +379,7 @@
         <input type="text" id="r-name" placeholder="RECIPE NAME" spellcheck="false" style="flex:1;min-width:0">
         <input type="number" id="r-dose" placeholder="DOSE g" min="0" step="0.1" style="width:136px">
       </div>
+      <input type="text" id="r-desc" placeholder="DESCRIPTION" spellcheck="false" style="width:100%;margin-top:10px">
       <div class="stage-head"><span id="sh-name">STAGE</span><span id="sh-time">BY TIME</span><span id="sh-g">TARGET g</span><span></span></div>
       <div id="stages"></div>
       <div class="editor-actions">
@@ -437,7 +439,7 @@ const I18N = {
     chartTitle: 'Brew Curve', legW: 'WEIGHT g', legT: 'TARGET', legS: 'SHADOW',
     guideNone: 'NONE', grpTargets: 'TARGETS', grpShadows: 'SHADOWS',
     recipes: 'Recipes', importB: 'Import', exportB: 'Export',
-    editor: 'Recipe Editor', namePh: 'RECIPE NAME', dosePh: 'DESIGN DOSE g', doseTag: 'DOSE',
+    editor: 'Recipe Editor', namePh: 'RECIPE NAME', dosePh: 'DESIGN DOSE g', doseTag: 'DOSE', descPh: 'DESCRIPTION — WHAT BEANS DOES IT SUIT?',
     shName: 'STAGE', shTime: 'REF TIME', shG: 'TARGET g', stageNamePh: 'STAGE NAME',
     addStage: '+ Stage', addHold: '+ Hold', saveRecipe: 'Save Recipe', newR: 'New', delR: 'Delete',
     editorHelp: 'PULSE RECIPE: A POUR STAGE RAISES GRAMS VS THE PREVIOUS STAGE AND ADVANCES WHEN THE SCALE ACTUALLY HITS THE TARGET; A WAIT STAGE KEEPS GRAMS EQUAL AND ADVANCES AFTER (STAGE TIME − PREVIOUS STAGE TIME) SECONDS. TIMES ONLY PLACE THE STAGE LINES ON THE CHART. SET A DESIGN DOSE TO MAKE IT RATIO-BASED: AT A DIFFERENT ACTUAL DOSE, EVERY TARGET SCALES PROPORTIONALLY (12g RECIPE AT 16g DOSE → ×1.33).',
@@ -486,7 +488,7 @@ const I18N = {
     chartTitle: '冲煮曲线', legW: '重量 克', legT: '目标', legS: '影子',
     guideNone: '无', grpTargets: '目标配方', grpShadows: '历史冲煮',
     recipes: '配方', importB: '导入', exportB: '导出',
-    editor: '配方编辑器', namePh: '配方名称', dosePh: '设计粉量 g', doseTag: '粉量',
+    editor: '配方编辑器', namePh: '配方名称', dosePh: '设计粉量 g', doseTag: '粉量', descPh: '描述 —— 适合什么豆子？',
     shName: '阶段', shTime: '参考时刻', shG: '目标克', stageNamePh: '阶段名称',
     addStage: '+ 注水段', addHold: '+ 等待段', saveRecipe: '保存配方', newR: '新建', delR: '删除',
     editorHelp: '脉冲式配方：注水段 = 克重比上一段增加，实际称重达到目标克数时才提示进入下一段；等待段 = 克重与上一段相同，从上段结束起等待（本段时刻 − 上段时刻）秒。时间仅用于在图表上定位阶段线。填写设计粉量后配方按比例生效：实际粉量不同时，全部目标克数自动等比缩放（12克 配方用 16克 粉 → ×1.33）。',
@@ -1270,6 +1272,7 @@ function loadEditor(r) {
   editingRecipe = r;
   $('r-name').value = r ? r.name : '';
   $('r-dose').value = r && r.dose ? r.dose : '';
+  $('r-desc').value = r && r.desc ? r.desc : '';
   const box = $('stages');
   box.innerHTML = '';
   (r ? r.stages : T().defStages.map(s => ({ ...s })))
@@ -1293,7 +1296,8 @@ async function renderRecipes() {
     const total = r.stages.length ? r.stages[r.stages.length - 1].g : 0;
     const dur = r.stages.length ? r.stages[r.stages.length - 1].t : 0;
     row.innerHTML =
-      '<span class="name">' + (active ? '▸ ' : '') + esc(r.name) + '</span>' +
+      '<span class="name">' + (active ? '▸ ' : '') + esc(r.name) +
+      (r.desc ? '<span class="desc">' + esc(r.desc) + '</span>' : '') + '</span>' +
       '<span class="meta">' + r.stages.length + ' ' + T().stagesUnit + ' // ' + total + 'g' +
       (r.dose ? ' @ ' + r.dose + 'g ' + T().doseTag : '') + ' // ' + fmtTime(dur * 1000).slice(0, 5) + '</span>';
 
@@ -1314,6 +1318,7 @@ async function renderRecipes() {
     mk(T().btnDup, async () => {
       const copy = { name: r.name + T().copySuffix, stages: JSON.parse(JSON.stringify(r.stages)) };
       if (r.dose) copy.dose = r.dose;
+      if (r.desc) copy.desc = r.desc;
       await putRecipe(copy);
       renderRecipes().then(rebuildGhostSel);
     });
@@ -1393,6 +1398,8 @@ $('r-save').onclick = async () => {
   const r = { name: $('r-name').value.trim() || 'UNTITLED', stages };
   const dose = +$('r-dose').value || 0;
   if (dose > 0) r.dose = dose;      // design dose → ratio-based recipe
+  const desc = $('r-desc').value.trim();
+  if (desc) r.desc = desc;          // e.g. what beans it suits
   if (editingRecipe && editingRecipe.id) r.id = editingRecipe.id;  // no id key → autoIncrement generates one
   const id = await putRecipe(r);
   r.id = r.id || id;
@@ -1431,12 +1438,17 @@ function parseRecipeText(text) {
   return stages.sort((a, b) => a.t - b.t);
 }
 $('qi-parse').onclick = async () => {
-  /* optional design-dose line ("粉量 12克" / "dose 12") makes it ratio-based */
+  /* optional design-dose line ("粉量 12克" / "dose 12") makes it ratio-based;
+     optional "说明: …" / "desc: …" line becomes the recipe description */
   let dose = 0;
+  let desc = '';
   const kept = [];
   for (const ln of $('qi-text').value.split(/[\n;；]+/)) {
     const m = ln.trim().match(/^(?:粉量|dose)\s*[:：]?\s*(\d+(?:\.\d+)?)/i);
-    if (m) dose = parseFloat(m[1]); else kept.push(ln);
+    const dm = ln.trim().match(/^(?:说明|简介|desc)\s*[:：]\s*(.+)/i);
+    if (m) dose = parseFloat(m[1]);
+    else if (dm) desc = dm[1].trim();
+    else kept.push(ln);
   }
   const stages = parseRecipeText(kept.join('\n'));
   const prev = $('qi-preview');
@@ -1448,6 +1460,7 @@ $('qi-parse').onclick = async () => {
     'IMPORTED ' + new Date().toISOString().slice(5, 10);
   const rec = { name, stages };
   if (dose > 0) rec.dose = dose;
+  if (desc) rec.desc = desc;
   await putRecipe(rec);
   await renderRecipes();
   rebuildGhostSel();
@@ -1541,6 +1554,7 @@ function applyLang() {
   $('r-export').textContent = t.exportB;
   $('editor-label').textContent = t.editor;
   $('r-name').placeholder = t.namePh;
+  $('r-desc').placeholder = t.descPh;
   $('r-dose').placeholder = t.dosePh;
   $('sh-name').textContent = t.shName;
   $('sh-time').textContent = t.shTime;
@@ -1634,6 +1648,7 @@ window.addEventListener('unhandledrejection', e => {
       await putRecipe({
         name: 'CLASSIC 1:15',
         dose: 15,
+        desc: '经典五段均衡 · 适合中烘~中深烘的均衡豆(哥伦比亚、巴西),甜感稳、容错高',
         stages: [
           { name: '闷蒸注水', t: 45, g: 50 },
           { name: '闷蒸等待', t: 60, g: 50 },
@@ -1667,6 +1682,7 @@ window.addEventListener('unhandledrejection', e => {
       await putRecipe({
         name: 'OREA',
         dose: 12,
+        desc: '快流速平底 · 适合浅烘高酸豆(埃塞水洗/日晒),明亮花果香、不易苦涩',
         stages: [
           { name: '闷蒸注水', t: 6, g: 30 },
           { name: '闷蒸等待', t: 24, g: 30 },
@@ -1678,6 +1694,42 @@ window.addEventListener('unhandledrejection', e => {
         ],
       });
     }
+    /* built-in preset: official OREA V4 "Easy Does It" one-cup (orea.uk/guides-v4) */
+    if (!recipesCache.some(r => r.name === 'OREA V4')) {
+      await putRecipe({
+        name: 'OREA V4',
+        dose: 16,
+        desc: 'OREA 官方一杯份 · 94°C 中粗研磨 · 浅烘友好,酸质干净、层次分明',
+        stages: [
+          { name: '闷蒸注水', t: 12, g: 60 },
+          { name: '闷蒸等待', t: 40, g: 60 },
+          { name: '第二段注水', t: 50, g: 110 },
+          { name: '等待下水', t: 75, g: 110 },
+          { name: '第三段注水', t: 85, g: 160 },
+          { name: '等待下水', t: 105, g: 160 },
+          { name: '第四段注水', t: 115, g: 210 },
+          { name: '等待下水', t: 135, g: 210 },
+          { name: '第五段注水', t: 145, g: 260 },
+          { name: '滴滤', t: 180, g: 260 },
+        ],
+      });
+    }
+    /* built-in preset: classic V60 one-cup (Hoffmann-style) */
+    if (!recipesCache.some(r => r.name === 'V60')) {
+      await putRecipe({
+        name: 'V60',
+        dose: 15,
+        desc: '经典锥形 · 适合花香果酸型浅中烘(耶加雪菲、肯尼亚),香气优先',
+        stages: [
+          { name: '闷蒸注水', t: 15, g: 50 },
+          { name: '闷蒸等待', t: 45, g: 50 },
+          { name: '第一段注水', t: 65, g: 150 },
+          { name: '等待下水', t: 75, g: 150 },
+          { name: '第二段注水', t: 95, g: 250 },
+          { name: '滴滤', t: 150, g: 250 },
+        ],
+      });
+    }
     /* one-time migration: fix 2nd-pour timing in the default OREA (60s -> 70s) */
     const oreaDef = recipesCache.find(r => r.name === 'OREA' && r.stages.length === 7);
     if (oreaDef) {
@@ -1685,9 +1737,19 @@ window.addEventListener('unhandledrejection', e => {
       if (s2 && s2.t === 60 && s2.g === 200) { s2.t = 70; await putRecipe(oreaDef); }
     }
     /* one-time migration: built-in presets become ratio-based (design dose) */
-    for (const [nm, d] of [['CLASSIC 1:15', 15], ['OREA', 12]]) {
+    for (const [nm, d] of [['CLASSIC 1:15', 15], ['OREA', 12], ['OREA V4', 16], ['V60', 15]]) {
       const r = recipesCache.find(x => x.name === nm && !x.dose);
       if (r) { r.dose = d; await putRecipe(r); }
+    }
+    /* one-time migration: attach descriptions to built-in presets */
+    for (const [nm, d] of [
+      ['CLASSIC 1:15', '经典五段均衡 · 适合中烘~中深烘的均衡豆(哥伦比亚、巴西),甜感稳、容错高'],
+      ['OREA', '快流速平底 · 适合浅烘高酸豆(埃塞水洗/日晒),明亮花果香、不易苦涩'],
+      ['OREA V4', 'OREA 官方一杯份 · 94°C 中粗研磨 · 浅烘友好,酸质干净、层次分明'],
+      ['V60', '经典锥形 · 适合花香果酸型浅中烘(耶加雪菲、肯尼亚),香气优先'],
+    ]) {
+      const r = recipesCache.find(x => x.name === nm && !x.desc);
+      if (r) { r.desc = d; await putRecipe(r); }
     }
     loadEditor(null);
     applyLang();
